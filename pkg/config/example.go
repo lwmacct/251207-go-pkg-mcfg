@@ -40,7 +40,7 @@ func GenerateExampleYAML[T any](cfg T) []byte {
 func RunGenerateExampleTest[T any](t *testing.T, defaultConfig T) {
 	t.Helper()
 
-	projectRoot, err := FindProjectRoot()
+	projectRoot, err := FindProjectRoot(1) // skip=1 跳过本函数，获取调用者(测试文件)位置
 	if err != nil {
 		t.Fatalf("无法找到项目根目录: %v", err)
 	}
@@ -71,7 +71,7 @@ func RunGenerateExampleTest[T any](t *testing.T, defaultConfig T) {
 func RunConfigKeysValidTest(t *testing.T) {
 	t.Helper()
 
-	projectRoot, err := FindProjectRoot()
+	projectRoot, err := FindProjectRoot(1) // skip=1 跳过本函数，获取调用者(测试文件)位置
 	if err != nil {
 		t.Fatalf("无法找到项目根目录: %v", err)
 	}
@@ -114,8 +114,9 @@ func RunConfigKeysValidTest(t *testing.T) {
 }
 
 // FindProjectRoot 通过查找 go.mod 文件定位项目根目录
-func FindProjectRoot() (string, error) {
-	_, filename, _, ok := runtime.Caller(1)
+// skip 指定跳过的调用栈层数，0 表示调用者，1 表示调用者的调用者，以此类推
+func FindProjectRoot(skip int) (string, error) {
+	_, filename, _, ok := runtime.Caller(skip + 1)
 	if !ok {
 		return "", fmt.Errorf("无法获取当前文件路径")
 	}
