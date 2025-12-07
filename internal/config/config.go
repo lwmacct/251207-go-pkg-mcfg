@@ -35,7 +35,7 @@ type ClientConfig struct {
 }
 
 // DefaultConfig 返回默认配置
-// 注意：这里的默认值应对齐 internal/command/*/command.go 中的默认值, 确保生成的配置文件示例与 CLI 默认值一致
+// 注意：internal/command/command.go 中的 Defaults 变量引用此函数以实现单一配置来源。
 func DefaultConfig() Config {
 	return Config{
 		Server: ServerConfig{
