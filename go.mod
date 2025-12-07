@@ -1,6 +1,6 @@
 module github.com/lwmacct/251207-go-pkg-config
 
-go 1.25.4
+go 1.25.0
 
 require (
 	github.com/knadh/koanf/parsers/yaml v1.1.0
