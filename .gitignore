@@ -1,0 +1,43 @@
+# 本地环境
+**/.DS_Store
+**/.local/*
+**/.venv/*
+**/.conda/*
+**/.task/remote/*
+
+# 秘密文件
+**/.env
+**/.secret/*
+
+# node_modules
+**/node_modules/**
+**/pnpm-lock.yaml
+**/yarn.lock
+**/tsconfig.tsbuildinfo
+
+# 临时目录
+**/tmp/**
+**/log/**
+**/logs/**
+**/temp/**
+**/cache/**
+
+# python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+*.pyw
+*.pyz
+*.pywz
+*.pyzw
+
+# build binaries
+/bin/
+/main
+/client
+/server
+
+# AI Agent 相关
+# **/.agent/*
+# **/.claude/*
