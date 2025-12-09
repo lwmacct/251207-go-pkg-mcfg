@@ -10,11 +10,58 @@ import (
 	"time"
 
 	"github.com/knadh/koanf/parsers/yaml"
+	"github.com/knadh/koanf/providers/env"
 	"github.com/knadh/koanf/providers/file"
 	"github.com/knadh/koanf/providers/structs"
 	"github.com/knadh/koanf/v2"
 	"github.com/urfave/cli/v3"
 )
+
+// loadOptions 配置加载选项。
+type loadOptions struct {
+	cmd         *cli.Command
+	configPaths []string
+	envPrefix   string
+}
+
+// Option 配置加载选项函数。
+type Option func(*loadOptions)
+
+// WithCommand 设置 CLI 命令，用于从 CLI flags 加载配置。
+//
+// CLI flags 具有最高优先级，仅当用户明确指定时才覆盖其他配置源。
+func WithCommand(cmd *cli.Command) Option {
+	return func(o *loadOptions) {
+		o.cmd = cmd
+	}
+}
+
+// WithConfigPaths 设置配置文件搜索路径。
+//
+// 按顺序搜索，找到第一个即停止。可使用 [DefaultPaths] 获取默认路径。
+func WithConfigPaths(paths ...string) Option {
+	return func(o *loadOptions) {
+		o.configPaths = paths
+	}
+}
+
+// WithEnvPrefix 设置环境变量前缀。
+//
+// 启用后，会从环境变量加载配置，优先级高于配置文件，低于 CLI flags。
+//
+// 环境变量命名规则：
+//   - 前缀 + 大写的 koanf key
+//   - 点号 (.) 转为下划线 (_)
+//
+// 示例 (前缀为 "MYAPP_")：
+//   - MYAPP_DEBUG → debug
+//   - MYAPP_SERVER_URL → server.url
+//   - MYAPP_CLIENT_TIMEOUT → client.timeout
+func WithEnvPrefix(prefix string) Option {
+	return func(o *loadOptions) {
+		o.envPrefix = prefix
+	}
+}
 
 // DefaultPaths 返回默认配置文件搜索路径。
 //
@@ -51,11 +98,18 @@ func DefaultPaths(appName ...string) []string {
 //
 // 优先级 (从低到高)：
 //  1. 默认值 - 通过 defaultConfig 参数传入
-//  2. 配置文件 - 按 configPaths 顺序搜索，找到第一个即停止
-//  3. CLI flags - 最高优先级
+//  2. 配置文件 - 通过 WithConfigPaths 选项设置
+//  3. 环境变量 - 通过 WithEnvPrefix 选项启用
+//  4. CLI flags - 通过 WithCommand 选项设置，最高优先级
 //
 // 泛型参数 T 为配置结构体类型，必须使用 koanf tag 标记字段。
-func Load[T any](cmd *cli.Command, configPaths []string, defaultConfig T) (*T, error) {
+func Load[T any](defaultConfig T, opts ...Option) (*T, error) {
+	// 解析选项
+	options := &loadOptions{}
+	for _, opt := range opts {
+		opt(options)
+	}
+
 	k := koanf.New(".")
 
 	// 1️⃣ 加载默认配置 (最低优先级)
@@ -65,7 +119,7 @@ func Load[T any](cmd *cli.Command, configPaths []string, defaultConfig T) (*T, e
 
 	// 2️⃣ 加载配置文件 (按顺序搜索，找到第一个即停止)
 	configLoaded := false
-	for _, path := range configPaths {
+	for _, path := range options.configPaths {
 		if err := k.Load(file.Provider(path), yaml.Parser()); err == nil {
 			slog.Debug("Loaded config from file", "path", path)
 			configLoaded = true
@@ -73,13 +127,22 @@ func Load[T any](cmd *cli.Command, configPaths []string, defaultConfig T) (*T, e
 		}
 	}
 
-	if !configLoaded {
+	if len(options.configPaths) > 0 && !configLoaded {
 		slog.Debug("No config file found, using defaults")
 	}
 
-	// 3️⃣ 加载 CLI flags (最高优先级，仅当用户明确指定时)
-	if cmd != nil {
-		applyCLIFlagsGeneric(cmd, k, defaultConfig)
+	// 3️⃣ 加载环境变量 (高于配置文件，低于 CLI flags)
+	if options.envPrefix != "" {
+		if err := k.Load(env.Provider(options.envPrefix, ".", envKeyDecoder(options.envPrefix)), nil); err != nil {
+			slog.Debug("Failed to load env variables", "error", err)
+		} else {
+			slog.Debug("Loaded config from environment", "prefix", options.envPrefix)
+		}
+	}
+
+	// 4️⃣ 加载 CLI flags (最高优先级，仅当用户明确指定时)
+	if options.cmd != nil {
+		applyCLIFlagsGeneric(options.cmd, k, defaultConfig)
 	}
 
 	// 解析到结构体
@@ -89,6 +152,23 @@ func Load[T any](cmd *cli.Command, configPaths []string, defaultConfig T) (*T, e
 	}
 
 	return &cfg, nil
+}
+
+// envKeyDecoder 返回环境变量 key 解码器。
+//
+// 转换规则：
+//  1. 移除前缀
+//  2. 转为小写
+//  3. 下划线 (_) 转为点号 (.)
+//
+// 示例：MYAPP_SERVER_URL → server.url
+func envKeyDecoder(prefix string) func(string) string {
+	return func(key string) string {
+		key = strings.TrimPrefix(key, prefix)
+		key = strings.ToLower(key)
+		key = strings.ReplaceAll(key, "_", ".")
+		return key
+	}
 }
 
 // applyCLIFlagsGeneric 通过反射将用户明确指定的 CLI flags 应用到 koanf 实例。

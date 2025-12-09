@@ -69,7 +69,8 @@ func ExampleGenerateExampleYAML() {
 // Load 函数按以下优先级合并配置:
 //  1. 默认值 (最低优先级)
 //  2. 配置文件
-//  3. CLI flags (最高优先级)
+//  3. 环境变量
+//  4. CLI flags (最高优先级)
 func ExampleLoad() {
 	type Config struct {
 		Name  string `koanf:"name"`
@@ -81,14 +82,52 @@ func ExampleLoad() {
 		Debug: false,
 	}
 
-	// 不使用 CLI 命令时，cmd 参数传 nil
+	// 使用函数选项模式加载配置
 	// 配置文件不存在时，使用默认值
-	cfg, err := config.Load(nil, []string{"nonexistent.yaml"}, defaultCfg)
+	cfg, err := config.Load(defaultCfg,
+		config.WithConfigPaths("nonexistent.yaml"),
+	)
 	if err != nil {
 		fmt.Println("加载失败:", err)
 		return
 	}
 
+	fmt.Println("Name:", cfg.Name)
+	fmt.Println("Debug:", cfg.Debug)
+
+	// Output:
+	// Name: default-app
+	// Debug: false
+}
+
+// ExampleLoad_withEnvPrefix 演示如何通过环境变量加载配置
+//
+// 环境变量命名规则：
+//   - 前缀 + 大写的 koanf key
+//   - 点号 (.) 转为下划线 (_)
+func ExampleLoad_withEnvPrefix() {
+	type Config struct {
+		Name  string `koanf:"name"`
+		Debug bool   `koanf:"debug"`
+	}
+
+	defaultCfg := Config{
+		Name:  "default-app",
+		Debug: false,
+	}
+
+	// 使用环境变量前缀 "MYAPP_"
+	// 支持的环境变量：MYAPP_NAME, MYAPP_DEBUG
+	cfg, err := config.Load(defaultCfg,
+		config.WithEnvPrefix("MYAPP_"),
+	)
+	if err != nil {
+		fmt.Println("加载失败:", err)
+		return
+	}
+
+	// 如果设置了 MYAPP_NAME=prod-app，则 cfg.Name 为 "prod-app"
+	// 如果没有设置环境变量，则使用默认值
 	fmt.Println("Name:", cfg.Name)
 	fmt.Println("Debug:", cfg.Debug)
 

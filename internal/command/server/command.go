@@ -16,6 +16,7 @@ import (
 
 	"github.com/lwmacct/251207-go-pkg-config/internal/command"
 	"github.com/lwmacct/251207-go-pkg-config/internal/config"
+	pkgconfig "github.com/lwmacct/251207-go-pkg-config/pkg/config"
 )
 
 // Command 服务器命令
@@ -51,8 +52,8 @@ var Command = &cli.Command{
 
 func action(ctx context.Context, cmd *cli.Command) error {
 
-	// 加载配置：默认值 → 配置文件 → CLI flags
-	cfg, err := config.Load(cmd, nil)
+	// 加载配置：默认值 → 配置文件 → 环境变量 → CLI flags
+	cfg, err := config.Load(pkgconfig.WithCommand(cmd))
 	if err != nil {
 		return err
 	}

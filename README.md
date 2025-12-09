@@ -5,7 +5,9 @@
 ## 特性
 
 - **泛型支持**：适用于任意配置结构体
-- **多源合并**：默认值 → 配置文件 → CLI flags（优先级递增）
+- **多源合并**：默认值 → 配置文件 → 环境变量 → CLI flags（优先级递增）
+- **函数选项模式**：灵活配置，向后兼容
+- **环境变量支持**：适合 Docker/K8s 容器化部署
 - **自动映射**：CLI flag 名称自动从 `koanf` tag 推导（snake_case → kebab-case）
 - **示例生成**：自动根据结构体生成带注释的 YAML 配置示例
 
@@ -26,7 +28,6 @@ package config
 import (
     "time"
     "github.com/lwmacct/251207-go-pkg-config/pkg/config"
-    "github.com/urfave/cli/v3"
 )
 
 type Config struct {
@@ -47,25 +48,49 @@ func DefaultConfig() Config {
     }
 }
 
-func Load(cmd *cli.Command, configPaths []string) (*Config, error) {
-    return config.Load(cmd, configPaths, DefaultConfig())
+func Load(opts ...config.Option) (*Config, error) {
+    return config.Load(DefaultConfig(), opts...)
 }
 ```
 
 ### 2. 加载配置
 
 ```go
-// 使用默认搜索路径
-cfg, err := config.Load(cmd, pkgconfig.DefaultPaths("myapp"))
+// 仅使用默认值
+cfg, err := config.Load(DefaultConfig())
 
-// 自定义搜索路径
-cfg, err := config.Load(cmd, []string{"config.yaml", "/etc/myapp/config.yaml"})
+// 使用配置文件
+cfg, err := config.Load(DefaultConfig(),
+    config.WithConfigPaths(config.DefaultPaths("myapp")...),
+)
 
-// 不搜索配置文件（仅默认值 + CLI flags）
-cfg, err := config.Load(cmd, nil)
+// 使用环境变量（前缀 MYAPP_）
+cfg, err := config.Load(DefaultConfig(),
+    config.WithEnvPrefix("MYAPP_"),
+)
+
+// 完整示例：配置文件 + 环境变量 + CLI flags
+cfg, err := config.Load(DefaultConfig(),
+    config.WithConfigPaths("config.yaml", "/etc/myapp/config.yaml"),
+    config.WithEnvPrefix("MYAPP_"),
+    config.WithCommand(cmd),
+)
 ```
 
-### 3. 生成配置示例文件
+### 3. 环境变量命名规则
+
+| 环境变量 | koanf key |
+|---------|-----------|
+| `MYAPP_SERVER_ADDR` | `server.addr` |
+| `MYAPP_SERVER_TIMEOUT` | `server.timeout` |
+| `MYAPP_DEBUG` | `debug` |
+
+转换规则：
+1. 移除前缀（如 `MYAPP_`）
+2. 转为小写
+3. 下划线 `_` 转为点号 `.`
+
+### 4. 生成配置示例文件
 
 创建测试文件 `internal/config/config_test.go`：
 
@@ -103,13 +128,38 @@ server:
 ### config.Load
 
 ```go
-func Load[T any](cmd *cli.Command, configPaths []string, defaultConfig T) (*T, error)
+func Load[T any](defaultConfig T, opts ...Option) (*T, error)
 ```
 
 加载配置，按优先级合并：
 1. `defaultConfig` - 默认值（最低优先级）
-2. `configPaths` - 配置文件（按顺序搜索，找到第一个即停止）
-3. `cmd` - CLI flags（最高优先级，仅当用户明确指定时覆盖）
+2. `WithConfigPaths` - 配置文件（按顺序搜索，找到第一个即停止）
+3. `WithEnvPrefix` - 环境变量
+4. `WithCommand` - CLI flags（最高优先级，仅当用户明确指定时覆盖）
+
+### config.WithConfigPaths
+
+```go
+func WithConfigPaths(paths ...string) Option
+```
+
+设置配置文件搜索路径。
+
+### config.WithEnvPrefix
+
+```go
+func WithEnvPrefix(prefix string) Option
+```
+
+设置环境变量前缀，启用环境变量配置源。
+
+### config.WithCommand
+
+```go
+func WithCommand(cmd *cli.Command) Option
+```
+
+设置 CLI 命令，启用 CLI flags 配置源。
 
 ### config.DefaultPaths
 

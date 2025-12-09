@@ -2,15 +2,15 @@
 //
 // 配置加载优先级 (从低到高)：
 //  1. 默认值 - DefaultConfig() 函数中定义
-//  2. 配置文件 - 按 configPaths 顺序搜索
-//  3. CLI flags - 最高优先级
+//  2. 配置文件 - 通过 WithConfigPaths 选项设置
+//  3. 环境变量 - 通过 WithEnvPrefix 选项启用
+//  4. CLI flags - 通过 WithCommand 选项设置
 package config
 
 import (
 	"time"
 
 	"github.com/lwmacct/251207-go-pkg-config/pkg/config"
-	"github.com/urfave/cli/v3"
 )
 
 // Config 应用配置
@@ -53,7 +53,6 @@ func DefaultConfig() Config {
 }
 
 // Load 加载配置，委托给 pkg/config.Load 泛型函数
-// configPaths 为可选的配置文件搜索路径
-func Load(cmd *cli.Command, configPaths []string) (*Config, error) {
-	return config.Load(cmd, configPaths, DefaultConfig())
+func Load(opts ...config.Option) (*Config, error) {
+	return config.Load(DefaultConfig(), opts...)
 }

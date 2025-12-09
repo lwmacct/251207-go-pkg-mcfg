@@ -4,8 +4,9 @@
 //
 // 使用泛型支持任意配置结构体类型，配置加载优先级 (从低到高)：
 //  1. 默认值 - 通过 defaultConfig 参数传入
-//  2. 配置文件 - 按 configPaths 顺序搜索，找到第一个即停止
-//  3. CLI flags - 最高优先级，仅当用户明确指定时覆盖
+//  2. 配置文件 - 通过 WithConfigPaths 选项设置
+//  3. 环境变量 - 通过 WithEnvPrefix 选项启用
+//  4. CLI flags - 通过 WithCommand 选项设置，最高优先级
 //
 // # 快速开始
 //
@@ -17,13 +18,28 @@
 //	    Timeout time.Duration `koanf:"timeout" comment:"超时时间"`
 //	}
 //
-// 加载配置：
+// 加载配置（使用函数选项模式）：
 //
-//	cfg, err := config.Load(cmd, config.DefaultPaths("myapp"), Config{
+//	cfg, err := config.Load(Config{
 //	    Name:    "default",
 //	    Debug:   false,
 //	    Timeout: 30 * time.Second,
-//	})
+//	},
+//	    config.WithConfigPaths(config.DefaultPaths("myapp")...),
+//	    config.WithEnvPrefix("MYAPP_"),
+//	    config.WithCommand(cmd),
+//	)
+//
+// # 环境变量
+//
+// 通过 [WithEnvPrefix] 启用环境变量支持，命名规则：
+//   - 前缀 + 大写的 koanf key
+//   - 点号 (.) 转为下划线 (_)
+//
+// 示例 (前缀为 "MYAPP_")：
+//   - MYAPP_DEBUG → debug
+//   - MYAPP_SERVER_URL → server.url
+//   - MYAPP_CLIENT_TIMEOUT → client.timeout
 //
 // # CLI Flag 映射
 //
