@@ -205,7 +205,7 @@ redis:
 		fmt.Println("创建临时文件失败:", err)
 		return
 	}
-	defer os.Remove(tmpFile)
+	defer func() { _ = os.Remove(tmpFile) }()
 
 	defaultCfg := Config{
 		Name: "default-app",

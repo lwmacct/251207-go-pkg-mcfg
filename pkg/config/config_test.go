@@ -22,8 +22,8 @@ func writeTempConfig(t *testing.T, content string) string {
 	require.NoError(t, err, "Failed to create temp file")
 	_, err = tmpFile.WriteString(content)
 	require.NoError(t, err, "Failed to write temp file")
-	tmpFile.Close()
-	t.Cleanup(func() { os.Remove(tmpFile.Name()) })
+	_ = tmpFile.Close()
+	t.Cleanup(func() { _ = os.Remove(tmpFile.Name()) })
 	return tmpFile.Name()
 }
 
