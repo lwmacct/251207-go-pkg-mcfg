@@ -97,11 +97,14 @@ cfg, err := config.Load(DefaultConfig(),
 | `MYAPP_SERVER_ADDR` | `server.addr` |
 | `MYAPP_SERVER_TIMEOUT` | `server.timeout` |
 | `MYAPP_DEBUG` | `debug` |
+| `MYAPP_CLIENT_REV_AUTH_USER` | `client.rev-auth-user` |
 
 转换规则：
 1. 移除前缀（如 `MYAPP_`）
 2. 转为小写
-3. 下划线 `_` 转为点号 `.`
+3. 点号 `.` 和连字符 `-` 都转为下划线 `_`
+
+**注意**：通过反射自动生成所有 koanf key 的绑定，因此支持任意命名的 koanf key（包括包含连字符的 key）。
 
 #### 直接绑定（WithEnvBindings）
 

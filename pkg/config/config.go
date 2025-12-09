@@ -10,7 +10,6 @@ import (
 	"time"
 
 	"github.com/knadh/koanf/parsers/yaml"
-	"github.com/knadh/koanf/providers/env"
 	"github.com/knadh/koanf/providers/file"
 	"github.com/knadh/koanf/providers/structs"
 	"github.com/knadh/koanf/v2"
@@ -53,12 +52,14 @@ func WithConfigPaths(paths ...string) Option {
 //
 // 环境变量命名规则：
 //   - 前缀 + 大写的 koanf key
-//   - 点号 (.) 转为下划线 (_)
+//   - 点号 (.) 和连字符 (-) 都转为下划线 (_)
 //
 // 示例 (前缀为 "MYAPP_")：
 //   - MYAPP_DEBUG → debug
 //   - MYAPP_SERVER_URL → server.url
-//   - MYAPP_CLIENT_TIMEOUT → client.timeout
+//   - MYAPP_CLIENT_REV_AUTH_USER → client.rev-auth-user (支持连字符)
+//
+// 注意：通过反射自动生成所有 koanf key 的绑定，因此支持任意命名的 koanf key。
 func WithEnvPrefix(prefix string) Option {
 	return func(o *loadOptions) {
 		o.envPrefix = prefix
@@ -197,13 +198,20 @@ func Load[T any](defaultConfig T, opts ...Option) (*T, error) {
 	// 2.5️⃣ 从配置文件读取环境变量绑定 (在加载配置文件后)
 	if options.envBindKey != "" {
 		if bindings := k.StringMap(options.envBindKey); len(bindings) > 0 {
-			// 合并到 envBindings（代码中的优先）
+			// 构建已绑定配置路径的集合（代码中的绑定优先）
+			boundPaths := make(map[string]bool)
+			for _, configPath := range options.envBindings {
+				boundPaths[configPath] = true
+			}
+
+			// 合并配置文件绑定（仅当配置路径未被绑定时）
 			for envKey, configPath := range bindings {
-				if _, exists := options.envBindings[envKey]; !exists {
+				if !boundPaths[configPath] {
 					if options.envBindings == nil {
 						options.envBindings = make(map[string]string)
 					}
 					options.envBindings[envKey] = configPath
+					boundPaths[configPath] = true
 				}
 			}
 			// 删除绑定节点，不污染用户配置
@@ -212,16 +220,30 @@ func Load[T any](defaultConfig T, opts ...Option) (*T, error) {
 		}
 	}
 
-	// 3️⃣ 加载环境变量 (高于配置文件，低于绑定和 CLI flags)
+	// 3️⃣ 自动生成环境变量绑定 (基于配置结构体的 koanf key)
+	// 这解决了 koanf key 包含连字符（如 rev-auth-user）时无法通过前缀匹配的问题
 	if options.envPrefix != "" {
-		if err := k.Load(env.Provider(options.envPrefix, ".", envKeyDecoder(options.envPrefix)), nil); err != nil {
-			slog.Debug("Failed to load env variables", "error", err)
-		} else {
-			slog.Debug("Loaded config from environment", "prefix", options.envPrefix)
+		// 构建已绑定配置路径的集合（用户显式绑定优先）
+		boundPaths := make(map[string]bool)
+		for _, configPath := range options.envBindings {
+			boundPaths[configPath] = true
 		}
+
+		autoBindings := generateEnvBindings(options.envPrefix, collectKoanfKeys(defaultConfig))
+		// 合并自动绑定（仅当配置路径未被绑定时）
+		for envKey, configPath := range autoBindings {
+			if !boundPaths[configPath] {
+				if options.envBindings == nil {
+					options.envBindings = make(map[string]string)
+				}
+				options.envBindings[envKey] = configPath
+				boundPaths[configPath] = true
+			}
+		}
+		slog.Debug("Generated auto env bindings", "prefix", options.envPrefix, "count", len(autoBindings))
 	}
 
-	// 4️⃣ 加载直接绑定的环境变量 (高于前缀匹配，低于 CLI flags)
+	// 4️⃣ 加载环境变量绑定 (高于配置文件，低于 CLI flags)
 	for envKey, configPath := range options.envBindings {
 		if val := os.Getenv(envKey); val != "" {
 			_ = k.Set(configPath, val)
@@ -258,6 +280,72 @@ func envKeyDecoder(prefix string) func(string) string {
 		key = strings.ReplaceAll(key, "_", ".")
 		return key
 	}
+}
+
+// collectKoanfKeys 通过反射收集配置结构体的所有 koanf key。
+//
+// 递归遍历结构体字段，返回所有叶子节点的完整 koanf key。
+// 例如对于 client.rev-auth-user 这样的嵌套结构，会返回完整路径。
+func collectKoanfKeys[T any](defaultConfig T) []string {
+	var keys []string
+	collectKoanfKeysRecursive(reflect.TypeOf(defaultConfig), "", &keys)
+	return keys
+}
+
+// collectKoanfKeysRecursive 递归收集 koanf key。
+func collectKoanfKeysRecursive(typ reflect.Type, prefix string, keys *[]string) {
+	// 处理指针类型
+	if typ.Kind() == reflect.Ptr {
+		typ = typ.Elem()
+	}
+
+	if typ.Kind() != reflect.Struct {
+		return
+	}
+
+	for i := 0; i < typ.NumField(); i++ {
+		field := typ.Field(i)
+
+		koanfKey := field.Tag.Get("koanf")
+		if koanfKey == "" {
+			continue
+		}
+
+		fullKey := koanfKey
+		if prefix != "" {
+			fullKey = prefix + "." + koanfKey
+		}
+
+		// 如果是嵌套结构体（非特殊类型），递归处理
+		if field.Type.Kind() == reflect.Struct &&
+			field.Type != reflect.TypeOf(time.Duration(0)) &&
+			field.Type != reflect.TypeOf(time.Time{}) {
+			collectKoanfKeysRecursive(field.Type, fullKey, keys)
+			continue
+		}
+
+		*keys = append(*keys, fullKey)
+	}
+}
+
+// generateEnvBindings 根据 koanf key 生成环境变量绑定。
+//
+// 转换规则：
+//   - koanf key 中的 "." 和 "-" 都转为 "_"
+//   - 转为大写
+//   - 添加前缀
+//
+// 示例 (前缀 "APP_")：
+//   - client.rev-auth-user → APP_CLIENT_REV_AUTH_USER
+//   - server.idle-timeout → APP_SERVER_IDLE_TIMEOUT
+func generateEnvBindings(prefix string, koanfKeys []string) map[string]string {
+	bindings := make(map[string]string, len(koanfKeys))
+	for _, key := range koanfKeys {
+		// 将 "." 和 "-" 都转为 "_"，然后大写
+		envKey := strings.ToUpper(strings.NewReplacer(".", "_", "-", "_").Replace(key))
+		bindings[prefix+envKey] = key
+	}
+	return bindings
 }
 
 // applyCLIFlagsGeneric 通过反射将用户明确指定的 CLI flags 应用到 koanf 实例。

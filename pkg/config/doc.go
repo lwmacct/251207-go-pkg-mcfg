@@ -36,12 +36,14 @@
 //
 // 通过 [WithEnvPrefix] 启用环境变量支持，命名规则：
 //   - 前缀 + 大写的 koanf key
-//   - 点号 (.) 转为下划线 (_)
+//   - 点号 (.) 和连字符 (-) 都转为下划线 (_)
 //
 // 示例 (前缀为 "MYAPP_")：
 //   - MYAPP_DEBUG → debug
 //   - MYAPP_SERVER_URL → server.url
-//   - MYAPP_CLIENT_TIMEOUT → client.timeout
+//   - MYAPP_CLIENT_REV_AUTH_USER → client.rev-auth-user (支持连字符)
+//
+// 注意：通过反射自动生成所有 koanf key 的绑定，因此支持任意命名的 koanf key。
 //
 // # 环境变量(绑定)
 //
