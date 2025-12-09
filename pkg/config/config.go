@@ -1,10 +1,3 @@
-// Author: lwmacct (https://github.com/lwmacct)
-// Package config 提供通用的配置加载功能，可被外部项目复用。
-//
-// 使用泛型支持任意配置结构体类型，配置加载优先级 (从低到高)：
-//  1. 默认值 - 通过 defaultConfig 参数传入
-//  2. 配置文件 - 按 configPaths 顺序搜索
-//  3. CLI flags - 最高优先级
 package config
 
 import (
@@ -23,31 +16,43 @@ import (
 	"github.com/urfave/cli/v3"
 )
 
-// DefaultPaths 返回默认配置文件搜索路径
-// appName 可选，若提供则包含用户主目录和系统配置目录
+// DefaultPaths 返回默认配置文件搜索路径。
+//
+// appName 可选，若提供则包含应用专属配置路径。
+//
+// 搜索优先级 (从高到低)：
+//  1. ./.appname.yaml - 当前目录应用配置 (项目级别)
+//  2. ~/.appname.yaml - 用户主目录配置
+//  3. /etc/appname/config.yaml - 系统级别配置
+//  4. config.yaml - 当前目录通用配置
+//  5. config/config.yaml - 子目录配置
 func DefaultPaths(appName ...string) []string {
-	paths := []string{
-		"config.yaml",
-		"config/config.yaml",
-	}
+	var paths []string
 
 	if len(appName) > 0 && appName[0] != "" {
 		name := appName[0]
-		// 添加用户主目录
+		// 当前目录应用配置 (最高优先级)
+		paths = append(paths, "."+name+".yaml")
+		// 用户主目录
 		if home, err := os.UserHomeDir(); err == nil {
 			paths = append(paths, filepath.Join(home, "."+name+".yaml"))
 		}
-		// 添加系统配置目录
+		// 系统配置目录
 		paths = append(paths, "/etc/"+name+"/config.yaml")
 	}
+
+	// 当前目录通用配置 (最低优先级)
+	paths = append(paths, "config.yaml", "config/config.yaml")
 
 	return paths
 }
 
-// Load 加载配置，按优先级合并：
-// 1. 默认值 (最低优先级) - 通过 defaultConfig 参数传入
-// 2. 配置文件 (按 configPaths 顺序搜索，找到第一个即停止)
-// 3. CLI flags (最高优先级)
+// Load 加载配置，按优先级合并。
+//
+// 优先级 (从低到高)：
+//  1. 默认值 - 通过 defaultConfig 参数传入
+//  2. 配置文件 - 按 configPaths 顺序搜索，找到第一个即停止
+//  3. CLI flags - 最高优先级
 //
 // 泛型参数 T 为配置结构体类型，必须使用 koanf tag 标记字段。
 func Load[T any](cmd *cli.Command, configPaths []string, defaultConfig T) (*T, error) {
@@ -86,13 +91,17 @@ func Load[T any](cmd *cli.Command, configPaths []string, defaultConfig T) (*T, e
 	return &cfg, nil
 }
 
-// applyCLIFlagsGeneric 通过反射将用户明确指定的 CLI flags 应用到 koanf 实例
-// 自动根据配置结构体的 koanf 标签映射 CLI flag 名称
-// koanf 标签使用 snake_case，CLI flag 使用 kebab-case
+// applyCLIFlagsGeneric 通过反射将用户明确指定的 CLI flags 应用到 koanf 实例。
 //
-// 支持嵌套结构体，例如：
-//   - server.url → --server-url
-//   - tls.skip_verify → --tls-skip-verify
+// 自动根据配置结构体的 koanf 标签映射 CLI flag 名称。
+//
+// 支持两种 CLI flag 格式 (优先使用 kebab-case)：
+//   - kebab-case: --server-skip_verify (仅 . 转为 -)
+//   - dot notation: --server.skip_verify (保持原样)
+//
+// 映射示例 (koanf tag → CLI flags)：
+//   - server.url → --server-url 或 --server.url
+//   - tls.skip_verify → --tls-skip_verify 或 --tls.skip_verify
 //
 // 支持的类型：
 //   - 基本类型: string, bool
@@ -106,26 +115,22 @@ func applyCLIFlagsGeneric[T any](cmd *cli.Command, k *koanf.Koanf, defaultConfig
 	applyCLIFlagsRecursive(cmd, k, reflect.TypeOf(defaultConfig), "")
 }
 
-// applyCLIFlagsRecursive 递归遍历结构体字段应用 CLI flags
+// applyCLIFlagsRecursive 递归遍历结构体字段应用 CLI flags。
 func applyCLIFlagsRecursive(cmd *cli.Command, k *koanf.Koanf, typ reflect.Type, prefix string) {
 	for i := 0; i < typ.NumField(); i++ {
 		field := typ.Field(i)
 
-		// 获取 koanf 标签作为配置 key (snake_case)
+		// 获取 koanf 标签作为配置 key
 		koanfKey := field.Tag.Get("koanf")
 		if koanfKey == "" {
 			continue
 		}
 
-		// 构建完整的 koanf key 和 CLI flag 名称
+		// 构建完整的 koanf key
 		fullKoanfKey := koanfKey
 		if prefix != "" {
 			fullKoanfKey = prefix + "." + koanfKey
 		}
-
-		// 转换为 CLI flag 名称 (kebab-case)
-		cliFlag := strings.ReplaceAll(fullKoanfKey, ".", "-")
-		cliFlag = strings.ReplaceAll(cliFlag, "_", "-")
 
 		// 如果是嵌套结构体，递归处理
 		if field.Type.Kind() == reflect.Struct &&
@@ -135,8 +140,9 @@ func applyCLIFlagsRecursive(cmd *cli.Command, k *koanf.Koanf, typ reflect.Type, 
 			continue
 		}
 
-		// 只有用户明确指定时才覆盖
-		if !cmd.IsSet(cliFlag) {
+		// 检测用户设置的 flag 格式 (kebab-case 或 dot notation)
+		cliFlag, isSet := detectCLIFlag(cmd, fullKoanfKey)
+		if !isSet {
 			continue
 		}
 
@@ -145,7 +151,31 @@ func applyCLIFlagsRecursive(cmd *cli.Command, k *koanf.Koanf, typ reflect.Type, 
 	}
 }
 
-// setCLIFlagValue 根据字段类型从 CLI 获取值并设置到 koanf
+// detectCLIFlag 检测用户设置的 CLI flag 格式。
+//
+// 支持两种格式：kebab-case (server-skip_verify) 和 dot notation (server.skip_verify)。
+// 返回实际设置的 flag 名称和是否被设置。
+func detectCLIFlag(cmd *cli.Command, koanfKey string) (string, bool) {
+	// 生成 kebab-case 格式: server.skip_verify -> server-skip_verify
+	kebabFlag := strings.ReplaceAll(koanfKey, ".", "-")
+
+	// dot notation 格式即为原始 koanf key: server.skip_verify
+	dotFlag := koanfKey
+
+	// 优先检查 kebab-case 格式
+	if cmd.IsSet(kebabFlag) {
+		return kebabFlag, true
+	}
+
+	// 再检查 dot notation 格式
+	if cmd.IsSet(dotFlag) {
+		return dotFlag, true
+	}
+
+	return "", false
+}
+
+// setCLIFlagValue 根据字段类型从 CLI 获取值并设置到 koanf。
 func setCLIFlagValue(cmd *cli.Command, k *koanf.Koanf, koanfKey, cliFlag string, fieldType reflect.Type) {
 	// 先检查特殊类型 (time.Duration, time.Time)
 	switch fieldType {
@@ -209,7 +239,7 @@ func setCLIFlagValue(cmd *cli.Command, k *koanf.Koanf, koanfKey, cliFlag string,
 	}
 }
 
-// setSliceFlagValue 处理切片类型的 CLI flag
+// setSliceFlagValue 处理切片类型的 CLI flag。
 func setSliceFlagValue(cmd *cli.Command, k *koanf.Koanf, koanfKey, cliFlag string, fieldType reflect.Type) {
 	elemType := fieldType.Elem()
 

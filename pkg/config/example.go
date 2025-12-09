@@ -1,4 +1,3 @@
-// Author: lwmacct (https://github.com/lwmacct)
 package config
 
 import (
@@ -15,8 +14,9 @@ import (
 	"github.com/knadh/koanf/v2"
 )
 
-// GenerateExampleYAML 根据配置结构体生成带注释的 YAML 示例
-// 通过反射读取 koanf 和 comment tag 自动生成
+// GenerateExampleYAML 根据配置结构体生成带注释的 YAML 示例。
+//
+// 通过反射读取 koanf 和 comment tag 自动生成。
 //
 // 使用示例：
 //
@@ -29,8 +29,9 @@ func GenerateExampleYAML[T any](cfg T) []byte {
 	return buf.Bytes()
 }
 
-// RunGenerateExampleTest 生成配置示例文件的测试入口
-// 外部项目可在测试中调用此函数
+// RunGenerateExampleTest 生成配置示例文件的测试入口。
+//
+// 外部项目可在测试中调用此函数。
 //
 // 使用示例：
 //
@@ -60,8 +61,9 @@ func RunGenerateExampleTest[T any](t *testing.T, defaultConfig T) {
 	t.Logf("✅ 已生成配置示例文件: %s", outputPath)
 }
 
-// RunConfigKeysValidTest 校验配置文件的测试入口
-// 验证 config.yaml 不包含 config.example.yaml 中不存在的配置项
+// RunConfigKeysValidTest 校验配置文件的测试入口。
+//
+// 验证 config.yaml 不包含 config.example.yaml 中不存在的配置项。
 //
 // 使用示例：
 //
@@ -113,8 +115,9 @@ func RunConfigKeysValidTest(t *testing.T) {
 	}
 }
 
-// FindProjectRoot 通过查找 go.mod 文件定位项目根目录
-// skip 指定跳过的调用栈层数，0 表示调用者，1 表示调用者的调用者，以此类推
+// FindProjectRoot 通过查找 go.mod 文件定位项目根目录。
+//
+// skip 指定跳过的调用栈层数，0 表示调用者，1 表示调用者的调用者，以此类推。
 func FindProjectRoot(skip int) (string, error) {
 	_, filename, _, ok := runtime.Caller(skip + 1)
 	if !ok {
@@ -134,6 +137,7 @@ func FindProjectRoot(skip int) (string, error) {
 	}
 }
 
+// loadYAMLKeys 加载 YAML 文件并返回所有配置键。
 func loadYAMLKeys(path string) ([]string, error) {
 	k := koanf.New(".")
 	if err := k.Load(file.Provider(path), yaml.Parser()); err != nil {
@@ -142,7 +146,7 @@ func loadYAMLKeys(path string) ([]string, error) {
 	return k.Keys(), nil
 }
 
-// writeStructYAML 递归写入结构体的 YAML 格式
+// writeStructYAML 递归写入结构体的 YAML 格式。
 func writeStructYAML(buf *bytes.Buffer, val reflect.Value, typ reflect.Type, indent int) {
 	// 处理指针类型
 	if val.Kind() == reflect.Ptr {
