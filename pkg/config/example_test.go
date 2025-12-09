@@ -3,6 +3,7 @@ package config_test
 
 import (
 	"fmt"
+	"os"
 	"time"
 
 	"github.com/lwmacct/251207-go-pkg-config/pkg/config"
@@ -134,4 +135,101 @@ func ExampleLoad_withEnvPrefix() {
 	// Output:
 	// Name: default-app
 	// Debug: false
+}
+
+// ExampleLoad_withEnvBindings 演示如何绑定第三方工具的环境变量
+//
+// 直接绑定环境变量到配置路径，无需遵循命名转换规则。
+// 适用于复用 Redis、etcd、MySQL 等工具的标准环境变量。
+func ExampleLoad_withEnvBindings() {
+	type RedisConfig struct {
+		URL string `koanf:"url"`
+	}
+	type Config struct {
+		Name  string      `koanf:"name"`
+		Redis RedisConfig `koanf:"redis"`
+	}
+
+	defaultCfg := Config{
+		Name: "default-app",
+		Redis: RedisConfig{
+			URL: "redis://localhost:6379",
+		},
+	}
+
+	// 绑定 REDIS_URL 环境变量到 redis.url 配置路径
+	// 如果设置了 REDIS_URL=redis://prod:6379，则 cfg.Redis.URL 为该值
+	cfg, err := config.Load(defaultCfg,
+		config.WithEnvBindings(map[string]string{
+			"REDIS_URL": "redis.url",
+		}),
+	)
+	if err != nil {
+		fmt.Println("加载失败:", err)
+		return
+	}
+
+	// 没有设置 REDIS_URL 环境变量时，使用默认值
+	fmt.Println("Name:", cfg.Name)
+	fmt.Println("Redis URL:", cfg.Redis.URL)
+
+	// Output:
+	// Name: default-app
+	// Redis URL: redis://localhost:6379
+}
+
+// ExampleLoad_withEnvBindKey 演示如何从配置文件中读取环境变量绑定
+//
+// 在配置文件中定义 envbind 节点，无需修改代码即可配置环境变量映射。
+// 配置文件中的绑定优先级低于代码中的 WithEnvBindings。
+func ExampleLoad_withEnvBindKey() {
+	type RedisConfig struct {
+		URL string `koanf:"url"`
+	}
+	type Config struct {
+		Name  string      `koanf:"name"`
+		Redis RedisConfig `koanf:"redis"`
+	}
+
+	// 创建临时配置文件
+	configContent := `
+envbind:
+  REDIS_URL: redis.url
+
+name: "from-config"
+redis:
+  url: "redis://localhost:6379"
+`
+	tmpFile := "/tmp/example_envbindkey_test.yaml"
+	if err := os.WriteFile(tmpFile, []byte(configContent), 0644); err != nil {
+		fmt.Println("创建临时文件失败:", err)
+		return
+	}
+	defer os.Remove(tmpFile)
+
+	defaultCfg := Config{
+		Name: "default-app",
+		Redis: RedisConfig{
+			URL: "redis://default:6379",
+		},
+	}
+
+	// 从配置文件的 envbind 节点读取绑定关系
+	// 如果设置了 REDIS_URL 环境变量，则会覆盖 redis.url
+	cfg, err := config.Load(defaultCfg,
+		config.WithConfigPaths(tmpFile),
+		config.WithEnvBindKey("envbind"),
+	)
+	if err != nil {
+		fmt.Println("加载失败:", err)
+		return
+	}
+
+	// envbind 节点不会出现在最终配置中
+	fmt.Println("Name:", cfg.Name)
+	fmt.Println("Redis URL:", cfg.Redis.URL)
+
+	// Output:
+	// Name: from-config
+	// Redis URL: redis://localhost:6379
 }

@@ -5,8 +5,9 @@
 // 使用泛型支持任意配置结构体类型，配置加载优先级 (从低到高)：
 //  1. 默认值 - 通过 defaultConfig 参数传入
 //  2. 配置文件 - 通过 WithConfigPaths 选项设置
-//  3. 环境变量 - 通过 WithEnvPrefix 选项启用
-//  4. CLI flags - 通过 WithCommand 选项设置，最高优先级
+//  3. 环境变量(前缀) - 通过 WithEnvPrefix 选项启用
+//  4. 环境变量(绑定) - 通过 WithEnvBindKey(配置文件) 或 WithEnvBindings(代码) 设置
+//  5. CLI flags - 通过 WithCommand 选项设置，最高优先级
 //
 // # 快速开始
 //
@@ -27,10 +28,11 @@
 //	},
 //	    config.WithConfigPaths(config.DefaultPaths("myapp")...),
 //	    config.WithEnvPrefix("MYAPP_"),
+//	    config.WithEnvBindKey("envbind"),
 //	    config.WithCommand(cmd),
 //	)
 //
-// # 环境变量
+// # 环境变量(前缀)
 //
 // 通过 [WithEnvPrefix] 启用环境变量支持，命名规则：
 //   - 前缀 + 大写的 koanf key
@@ -40,6 +42,27 @@
 //   - MYAPP_DEBUG → debug
 //   - MYAPP_SERVER_URL → server.url
 //   - MYAPP_CLIENT_TIMEOUT → client.timeout
+//
+// # 环境变量(绑定)
+//
+// 方式一：通过代码绑定 [WithEnvBindings]：
+//
+//	config.WithEnvBindings(map[string]string{
+//	    "REDIS_URL":         "redis.url",
+//	    "ETCDCTL_ENDPOINTS": "etcd.endpoints",
+//	})
+//
+// 方式二：通过配置文件绑定 [WithEnvBindKey]：
+//
+//	# config.yaml
+//	envbind:
+//	  REDIS_URL: redis.url
+//	  ETCDCTL_ENDPOINTS: etcd.endpoints
+//
+//	redis:
+//	  url: "redis://localhost:6379"
+//
+// 代码中的绑定优先级高于配置文件中的绑定。
 //
 // # CLI Flag 映射
 //

@@ -22,6 +22,8 @@ type loadOptions struct {
 	cmd         *cli.Command
 	configPaths []string
 	envPrefix   string
+	envBindings map[string]string
+	envBindKey  string
 }
 
 // Option 配置加载选项函数。
@@ -63,6 +65,64 @@ func WithEnvPrefix(prefix string) Option {
 	}
 }
 
+// WithEnvBinding 绑定单个环境变量到配置路径。
+//
+// 用于复用第三方工具的标准环境变量，优先级高于 WithEnvPrefix。
+//
+// 示例：
+//
+//	config.WithEnvBinding("REDIS_URL", "redis.url")
+//	config.WithEnvBinding("ETCDCTL_ENDPOINTS", "etcd.endpoints")
+func WithEnvBinding(envKey, configPath string) Option {
+	return func(o *loadOptions) {
+		if o.envBindings == nil {
+			o.envBindings = make(map[string]string)
+		}
+		o.envBindings[envKey] = configPath
+	}
+}
+
+// WithEnvBindings 批量绑定环境变量到配置路径。
+//
+// 用于复用第三方工具的标准环境变量，优先级高于 WithEnvPrefix。
+//
+// 示例：
+//
+//	config.WithEnvBindings(map[string]string{
+//	    "REDIS_URL":         "redis.url",
+//	    "ETCDCTL_ENDPOINTS": "etcd.endpoints",
+//	    "MYSQL_PWD":         "database.password",
+//	})
+func WithEnvBindings(bindings map[string]string) Option {
+	return func(o *loadOptions) {
+		if o.envBindings == nil {
+			o.envBindings = make(map[string]string)
+		}
+		for k, v := range bindings {
+			o.envBindings[k] = v
+		}
+	}
+}
+
+// WithEnvBindKey 设置配置文件中的环境变量绑定节点名称。
+//
+// 启用后，会从配置文件的指定节点读取环境变量绑定关系，无需修改代码即可配置映射。
+// 配置文件中的绑定优先级低于代码中的 [WithEnvBindings]（代码显式指定更优先）。
+//
+// 配置文件示例：
+//
+//	envbind:
+//	  REDIS_URL: redis.url
+//	  ETCDCTL_ENDPOINTS: etcd.endpoints
+//
+//	redis:
+//	  url: "redis://localhost:6379"
+func WithEnvBindKey(key string) Option {
+	return func(o *loadOptions) {
+		o.envBindKey = key
+	}
+}
+
 // DefaultPaths 返回默认配置文件搜索路径。
 //
 // appName 可选，若提供则包含应用专属配置路径。
@@ -99,8 +159,11 @@ func DefaultPaths(appName ...string) []string {
 // 优先级 (从低到高)：
 //  1. 默认值 - 通过 defaultConfig 参数传入
 //  2. 配置文件 - 通过 WithConfigPaths 选项设置
-//  3. 环境变量 - 通过 WithEnvPrefix 选项启用
-//  4. CLI flags - 通过 WithCommand 选项设置，最高优先级
+//  3. 环境变量(前缀) - 通过 WithEnvPrefix 选项启用
+//  4. 环境变量(绑定) - 通过 WithEnvBindKey(配置文件) 或 WithEnvBindings(代码) 设置
+//  5. CLI flags - 通过 WithCommand 选项设置，最高优先级
+//
+// 环境变量绑定优先级：代码中的 WithEnvBindings > 配置文件中的 envBindKey 节点。
 //
 // 泛型参数 T 为配置结构体类型，必须使用 koanf tag 标记字段。
 func Load[T any](defaultConfig T, opts ...Option) (*T, error) {
@@ -131,7 +194,25 @@ func Load[T any](defaultConfig T, opts ...Option) (*T, error) {
 		slog.Debug("No config file found, using defaults")
 	}
 
-	// 3️⃣ 加载环境变量 (高于配置文件，低于 CLI flags)
+	// 2.5️⃣ 从配置文件读取环境变量绑定 (在加载配置文件后)
+	if options.envBindKey != "" {
+		if bindings := k.StringMap(options.envBindKey); len(bindings) > 0 {
+			// 合并到 envBindings（代码中的优先）
+			for envKey, configPath := range bindings {
+				if _, exists := options.envBindings[envKey]; !exists {
+					if options.envBindings == nil {
+						options.envBindings = make(map[string]string)
+					}
+					options.envBindings[envKey] = configPath
+				}
+			}
+			// 删除绑定节点，不污染用户配置
+			k.Delete(options.envBindKey)
+			slog.Debug("Loaded env bindings from config", "key", options.envBindKey, "count", len(bindings))
+		}
+	}
+
+	// 3️⃣ 加载环境变量 (高于配置文件，低于绑定和 CLI flags)
 	if options.envPrefix != "" {
 		if err := k.Load(env.Provider(options.envPrefix, ".", envKeyDecoder(options.envPrefix)), nil); err != nil {
 			slog.Debug("Failed to load env variables", "error", err)
@@ -140,7 +221,15 @@ func Load[T any](defaultConfig T, opts ...Option) (*T, error) {
 		}
 	}
 
-	// 4️⃣ 加载 CLI flags (最高优先级，仅当用户明确指定时)
+	// 4️⃣ 加载直接绑定的环境变量 (高于前缀匹配，低于 CLI flags)
+	for envKey, configPath := range options.envBindings {
+		if val := os.Getenv(envKey); val != "" {
+			_ = k.Set(configPath, val)
+			slog.Debug("Loaded env binding", "env", envKey, "path", configPath)
+		}
+	}
+
+	// 5️⃣ 加载 CLI flags (最高优先级，仅当用户明确指定时)
 	if options.cmd != nil {
 		applyCLIFlagsGeneric(options.cmd, k, defaultConfig)
 	}
