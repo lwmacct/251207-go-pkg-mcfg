@@ -15,15 +15,12 @@ import (
 
 	"github.com/lwmacct/251207-go-pkg-config/internal/command"
 	"github.com/lwmacct/251207-go-pkg-config/internal/config"
-	pkgconfig "github.com/lwmacct/251207-go-pkg-config/pkg/config"
 )
 
 // Command 客户端命令
 var Command = &cli.Command{
-	Name:     "client",
-	Usage:    "HTTP 客户端工具",
-	Action:   action,
-	Commands: []*cli.Command{version.Command, healthCommand, getCommand},
+	Name:  "client",
+	Usage: "HTTP 客户端工具",
 	Flags: []cli.Flag{
 		&cli.StringFlag{
 			Name:    "client-url",
@@ -42,21 +39,21 @@ var Command = &cli.Command{
 			Usage: "重试次数",
 		},
 	},
-}
-
-// healthCommand 健康检查子命令
-var healthCommand = &cli.Command{
-	Name:   "health",
-	Usage:  "检查服务器健康状态",
-	Action: healthAction,
-}
-
-// getCommand GET 请求子命令
-var getCommand = &cli.Command{
-	Name:      "get",
-	Usage:     "发送 GET 请求",
-	ArgsUsage: "[path]",
-	Action:    getAction,
+	Action: action,
+	Commands: []*cli.Command{
+		version.Command,
+		{
+			Name:   "health",
+			Usage:  "检查服务器健康状态",
+			Action: healthAction,
+		},
+		{
+			Name:      "get",
+			Usage:     "发送 GET 请求",
+			ArgsUsage: "[path]",
+			Action:    getAction,
+		},
+	},
 }
 
 func action(ctx context.Context, cmd *cli.Command) error {
@@ -66,7 +63,7 @@ func action(ctx context.Context, cmd *cli.Command) error {
 
 func healthAction(ctx context.Context, cmd *cli.Command) error {
 
-	cfg, err := config.Load(pkgconfig.WithCommand(cmd))
+	cfg, err := config.Load(cmd)
 	if err != nil {
 		return err
 	}
@@ -84,7 +81,7 @@ func healthAction(ctx context.Context, cmd *cli.Command) error {
 
 func getAction(ctx context.Context, cmd *cli.Command) error {
 
-	cfg, err := config.Load(pkgconfig.WithCommand(cmd))
+	cfg, err := config.Load(cmd)
 	if err != nil {
 		return err
 	}

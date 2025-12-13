@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/lwmacct/251207-go-pkg-config/pkg/config"
+	"github.com/urfave/cli/v3"
 )
 
 // Config 应用配置
@@ -53,6 +54,6 @@ func DefaultConfig() Config {
 }
 
 // Load 加载配置，委托给 pkg/config.Load 泛型函数
-func Load(opts ...config.Option) (*Config, error) {
-	return config.Load(DefaultConfig(), opts...)
+func Load(cmd *cli.Command, opts ...config.Option) (*Config, error) {
+	return config.Load(DefaultConfig(), append(opts, config.WithCommand(cmd))...)
 }
