@@ -280,6 +280,80 @@ func TestLoadWithNonExistentConfigFile(t *testing.T) {
 	assert.Equal(t, "fallback-app", cfg.Name)
 }
 
+// TestLoadWithConfigFileOnly 测试纯配置文件读取 (cmd=nil, 无环境变量)
+// 验证当只使用配置文件时，Load 函数能正确解析并覆盖默认值
+func TestLoadWithConfigFileOnly(t *testing.T) {
+	type ServerConfig struct {
+		Host    string        `koanf:"host"`
+		Port    int           `koanf:"port"`
+		Timeout time.Duration `koanf:"timeout"`
+	}
+	type Config struct {
+		Name   string       `koanf:"name"`
+		Debug  bool         `koanf:"debug"`
+		Server ServerConfig `koanf:"server"`
+	}
+
+	tmpFile := writeTempConfig(t, `
+name: "from-file"
+debug: true
+server:
+  host: "0.0.0.0"
+  port: 9090
+  timeout: 60s
+`)
+
+	// cmd=nil, 只有配置文件，没有 WithCommand/WithEnvPrefix/WithEnvBinding
+	cfg, err := Load(
+		Config{
+			Name:  "default-app",
+			Debug: false,
+			Server: ServerConfig{
+				Host:    "localhost",
+				Port:    8080,
+				Timeout: 30 * time.Second,
+			},
+		},
+		WithConfigPaths(tmpFile),
+	)
+	require.NoError(t, err)
+
+	a := assert.New(t)
+	a.Equal("from-file", cfg.Name, "config file should override default")
+	a.True(cfg.Debug, "config file should override default")
+	a.Equal("0.0.0.0", cfg.Server.Host, "nested config should be loaded")
+	a.Equal(9090, cfg.Server.Port, "nested config should be loaded")
+	a.Equal(60*time.Second, cfg.Server.Timeout, "duration should be parsed correctly")
+}
+
+// TestLoadWithConfigFilePartialOverride 测试配置文件部分覆盖
+// 验证配置文件只覆盖指定字段，未指定字段保持默认值
+func TestLoadWithConfigFilePartialOverride(t *testing.T) {
+	type Config struct {
+		Name    string `koanf:"name"`
+		Debug   bool   `koanf:"debug"`
+		Port    int    `koanf:"port"`
+		Timeout int    `koanf:"timeout"`
+	}
+
+	tmpFile := writeTempConfig(t, `
+name: "partial-override"
+port: 9000
+`)
+
+	cfg, err := Load(
+		Config{Name: "default", Debug: true, Port: 8080, Timeout: 30},
+		WithConfigPaths(tmpFile),
+	)
+	require.NoError(t, err)
+
+	a := assert.New(t)
+	a.Equal("partial-override", cfg.Name, "specified field should be overridden")
+	a.True(cfg.Debug, "unspecified field should keep default (bool)")
+	a.Equal(9000, cfg.Port, "specified field should be overridden")
+	a.Equal(30, cfg.Timeout, "unspecified field should keep default (int)")
+}
+
 // =============================================================================
 // CLI Flags 测试 (github.com/urfave/cli/v3)
 // =============================================================================

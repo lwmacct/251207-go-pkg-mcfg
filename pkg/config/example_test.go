@@ -9,8 +9,8 @@ import (
 	"github.com/lwmacct/251207-go-pkg-config/pkg/config"
 )
 
-// ExampleDefaultPaths 演示如何获取默认配置文件搜索路径
-func ExampleDefaultPaths() {
+// Example_defaultPaths 演示如何获取默认配置文件搜索路径
+func Example_defaultPaths() {
 	// 不指定应用名称时，返回基础路径
 	paths := config.DefaultPaths()
 	fmt.Println("基础路径数量:", len(paths))
@@ -24,8 +24,8 @@ func ExampleDefaultPaths() {
 	// 带应用名路径数量: 5
 }
 
-// ExampleGenerateExampleYAML 演示如何根据配置结构体生成 YAML 示例
-func ExampleGenerateExampleYAML() {
+// Example_generateExampleYAML 演示如何根据配置结构体生成 YAML 示例
+func Example_generateExampleYAML() {
 	// 定义配置结构体，使用 koanf 和 comment 标签
 	type ServerConfig struct {
 		Host string `koanf:"host" comment:"服务器主机地址"`
@@ -65,14 +65,14 @@ func ExampleGenerateExampleYAML() {
 	//   port: 8080 # 服务器端口
 }
 
-// ExampleLoad 演示如何加载配置
+// Example_load 演示如何加载配置
 //
 // Load 函数按以下优先级合并配置:
 //  1. 默认值 (最低优先级)
 //  2. 配置文件
 //  3. 环境变量
 //  4. CLI flags (最高优先级)
-func ExampleLoad() {
+func Example_load() {
 	type Config struct {
 		Name  string `koanf:"name"`
 		Debug bool   `koanf:"debug"`
@@ -101,12 +101,12 @@ func ExampleLoad() {
 	// Debug: false
 }
 
-// ExampleLoad_withEnvPrefix 演示如何通过环境变量加载配置
+// Example_load_withEnvPrefix 演示如何通过环境变量加载配置
 //
 // 环境变量命名规则：
 //   - 前缀 + 大写的 koanf key
 //   - 点号 (.) 转为下划线 (_)
-func ExampleLoad_withEnvPrefix() {
+func Example_load_withEnvPrefix() {
 	type Config struct {
 		Name  string `koanf:"name"`
 		Debug bool   `koanf:"debug"`
@@ -137,11 +137,11 @@ func ExampleLoad_withEnvPrefix() {
 	// Debug: false
 }
 
-// ExampleLoad_withEnvBindings 演示如何绑定第三方工具的环境变量
+// Example_load_withEnvBindings 演示如何绑定第三方工具的环境变量
 //
 // 直接绑定环境变量到配置路径，无需遵循命名转换规则。
 // 适用于复用 Redis、etcd、MySQL 等工具的标准环境变量。
-func ExampleLoad_withEnvBindings() {
+func Example_load_withEnvBindings() {
 	type RedisConfig struct {
 		URL string `koanf:"url"`
 	}
@@ -178,11 +178,11 @@ func ExampleLoad_withEnvBindings() {
 	// Redis URL: redis://localhost:6379
 }
 
-// ExampleLoad_withEnvBindKey 演示如何从配置文件中读取环境变量绑定
+// Example_load_withEnvBindKey 演示如何从配置文件中读取环境变量绑定
 //
 // 在配置文件中定义 envbind 节点，无需修改代码即可配置环境变量映射。
 // 配置文件中的绑定优先级低于代码中的 WithEnvBindings。
-func ExampleLoad_withEnvBindKey() {
+func Example_load_withEnvBindKey() {
 	type RedisConfig struct {
 		URL string `koanf:"url"`
 	}
