@@ -53,12 +53,13 @@ func DefaultConfig() Config {
 	}
 }
 
-// Load 加载配置，委托给 pkg/config.Load 泛型函数
 func Load(cmd *cli.Command, appName string, opts ...config.Option) (*Config, error) {
 	return config.Load(
 		DefaultConfig(),
-		config.WithConfigPaths(appName),
-		config.WithEnvPrefix("APP_"),
-		config.WithCommand(cmd),
+		append([]config.Option{
+			config.WithCommand(cmd),
+			config.WithConfigPaths(config.DefaultPaths(appName)...),
+			config.WithEnvPrefix("APP_"),
+		}, opts...)...,
 	)
 }
