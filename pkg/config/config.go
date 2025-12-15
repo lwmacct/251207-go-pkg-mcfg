@@ -20,6 +20,8 @@ import (
 type loadOptions struct {
 	cmd         *cli.Command
 	configPaths []string
+	baseDir     string // 路径基准目录，用于将相对路径转换为绝对路径
+	baseDirSet  bool   // 是否显式设置了 baseDir（区分空字符串和未设置）
 	envPrefix   string
 	envBindings map[string]string
 	envBindKey  string
@@ -43,6 +45,21 @@ func WithCommand(cmd *cli.Command) Option {
 func WithConfigPaths(paths ...string) Option {
 	return func(o *loadOptions) {
 		o.configPaths = paths
+	}
+}
+
+// WithBaseDir 设置相对路径的基准目录。
+//
+// 默认情况下，[Load] 使用项目根目录（go.mod 所在目录）作为基准。
+// 使用此选项可覆盖默认行为：
+//   - 传入空字符串：使用当前工作目录
+//   - 传入自定义路径：使用指定目录
+//
+// 注意：绝对路径不受影响。
+func WithBaseDir(path string) Option {
+	return func(o *loadOptions) {
+		o.baseDir = path
+		o.baseDirSet = true
 	}
 }
 
@@ -174,6 +191,13 @@ func Load[T any](defaultConfig T, opts ...Option) (*T, error) {
 		opt(options)
 	}
 
+	// 默认使用项目根目录作为相对路径基准
+	if !options.baseDirSet {
+		if root, err := FindProjectRoot(1); err == nil {
+			options.baseDir = root
+		}
+	}
+
 	k := koanf.New(".")
 
 	// 1️⃣ 加载默认配置 (最低优先级)
@@ -183,7 +207,18 @@ func Load[T any](defaultConfig T, opts ...Option) (*T, error) {
 
 	// 2️⃣ 加载配置文件 (按顺序搜索，找到第一个即停止)
 	configLoaded := false
-	for _, path := range options.configPaths {
+	paths := options.configPaths
+	if options.baseDir != "" {
+		paths = make([]string, len(options.configPaths))
+		for i, p := range options.configPaths {
+			if !filepath.IsAbs(p) {
+				paths[i] = filepath.Join(options.baseDir, p)
+			} else {
+				paths[i] = p
+			}
+		}
+	}
+	for _, path := range paths {
 		if err := k.Load(file.Provider(path), yaml.Parser()); err == nil {
 			slog.Debug("Loaded config from file", "path", path)
 			configLoaded = true

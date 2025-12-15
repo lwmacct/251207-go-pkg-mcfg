@@ -354,6 +354,47 @@ port: 9000
 	a.Equal(30, cfg.Timeout, "unspecified field should keep default (int)")
 }
 
+// TestLoadWithBaseDir 测试路径基准目录功能
+func TestLoadWithBaseDir(t *testing.T) {
+	type ServerConfig struct {
+		Addr string `koanf:"addr"`
+	}
+	type Config struct {
+		Server ServerConfig `koanf:"server"`
+	}
+
+	t.Run("default uses project root", func(t *testing.T) {
+		// 默认行为：相对路径基于项目根目录
+		cfg, err := Load(
+			Config{Server: ServerConfig{Addr: "default"}},
+			WithConfigPaths("config/config.example.yaml"),
+		)
+		require.NoError(t, err)
+		assert.Equal(t, ":8080", cfg.Server.Addr)
+	})
+
+	t.Run("WithBaseDir empty uses cwd", func(t *testing.T) {
+		// WithBaseDir("") 使用当前工作目录
+		cfg, err := Load(
+			Config{Server: ServerConfig{Addr: "fallback"}},
+			WithBaseDir(""),
+			WithConfigPaths("nonexistent.yaml"),
+		)
+		require.NoError(t, err)
+		assert.Equal(t, "fallback", cfg.Server.Addr)
+	})
+
+	t.Run("absolute path unchanged", func(t *testing.T) {
+		tmpFile := writeTempConfig(t, `server: {addr: ":9090"}`)
+		cfg, err := Load(
+			Config{Server: ServerConfig{Addr: "default"}},
+			WithConfigPaths(tmpFile),
+		)
+		require.NoError(t, err)
+		assert.Equal(t, ":9090", cfg.Server.Addr)
+	})
+}
+
 // =============================================================================
 // CLI Flags 测试 (github.com/urfave/cli/v3)
 // =============================================================================
