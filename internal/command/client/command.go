@@ -63,7 +63,7 @@ func action(ctx context.Context, cmd *cli.Command) error {
 
 func healthAction(ctx context.Context, cmd *cli.Command) error {
 
-	cfg, err := config.Load(cmd)
+	cfg, err := config.Load(cmd, version.GetAppRawName())
 	if err != nil {
 		return err
 	}
@@ -81,7 +81,7 @@ func healthAction(ctx context.Context, cmd *cli.Command) error {
 
 func getAction(ctx context.Context, cmd *cli.Command) error {
 
-	cfg, err := config.Load(cmd)
+	cfg, err := config.Load(cmd, version.GetAppRawName())
 	if err != nil {
 		return err
 	}

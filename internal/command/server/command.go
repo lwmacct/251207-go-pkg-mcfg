@@ -52,7 +52,7 @@ var Command = &cli.Command{
 func action(ctx context.Context, cmd *cli.Command) error {
 
 	// 加载配置：默认值 → 配置文件 → 环境变量 → CLI flags
-	cfg, err := config.Load(cmd)
+	cfg, err := config.Load(cmd, version.GetAppRawName())
 	if err != nil {
 		return err
 	}
