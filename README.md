@@ -141,7 +141,9 @@ cfg, err := config.Load(DefaultConfig(),
 
 **绑定优先级**：代码中的 `WithEnvBindings` > 配置文件中的 `envbind` 节点。
 
-### 4. 生成配置示例文件
+### 4. 测试驱动的配置管理
+
+本库提供 `ConfigTestHelper` 测试辅助工具，通过单元测试实现配置示例生成和配置校验。
 
 创建测试文件 `internal/config/config_test.go`：
 
@@ -153,11 +155,21 @@ import (
     "github.com/lwmacct/251207-go-pkg-config/pkg/config"
 )
 
-func TestGenerateExample(t *testing.T) { config.RunGenerateExampleTest(t, DefaultConfig()) }
-func TestConfigKeysValid(t *testing.T) { config.RunConfigKeysValidTest(t) }
+// 定义一次，复用多处
+var helper = config.ConfigTestHelper[Config]{
+    ExamplePath: "config/config.example.yaml",
+    ConfigPath:  "config/config.yaml",
+}
+
+func TestGenerateExample(t *testing.T) { helper.GenerateExample(t, DefaultConfig()) }
+func TestConfigKeysValid(t *testing.T) { helper.ValidateKeys(t) }
 ```
 
-运行测试生成 `config/config.example.yaml`：
+路径为相对路径，相对于 `go.mod` 所在目录。
+
+#### 生成配置示例（TestGenerateExample）
+
+根据 `DefaultConfig()` 结构体自动生成带注释的示例文件：
 
 ```bash
 go test -v -run TestGenerateExample ./internal/config/...
@@ -173,6 +185,23 @@ server:
   addr: ":8080" # 监听地址
   timeout: 30s # 超时时间
 ```
+
+**工作原理**：通过反射读取结构体的 `koanf` 和 `comment` tag，自动生成完整的 YAML 示例。
+
+#### 校验配置文件（TestConfigKeysValid）
+
+验证配置文件中的所有配置项都在示例文件中定义：
+
+```bash
+go test -v -run TestConfigKeysValid ./internal/config/...
+```
+
+**用途**：
+- 防止配置项拼写错误（如 `servr.addr` 写成 `server.addr`）
+- 检测已废弃的配置项
+- CI 集成，确保配置文件与代码同步
+
+如果存在无效配置项，测试将失败并列出所有问题项。如果配置文件不存在，测试会自动跳过。
 
 ## API 参考
 
@@ -250,9 +279,19 @@ func GenerateExampleYAML[T any](cfg T) []byte
 
 根据配置结构体生成带注释的 YAML 示例，通过反射读取 `koanf` 和 `comment` tag。
 
-### config.RunGenerateExampleTest / config.RunConfigKeysValidTest
+### config.ConfigTestHelper
 
-测试辅助函数，用于在单元测试中生成配置示例和校验配置文件。
+```go
+type ConfigTestHelper[T any] struct {
+    ExamplePath string // 示例文件相对路径
+    ConfigPath  string // 配置文件相对路径
+}
+
+func (h *ConfigTestHelper[T]) GenerateExample(t *testing.T, defaultConfig T)
+func (h *ConfigTestHelper[T]) ValidateKeys(t *testing.T)
+```
+
+测试辅助工具，用于在单元测试中生成配置示例和校验配置文件。路径相对于 `go.mod` 所在目录。
 
 ## License
 

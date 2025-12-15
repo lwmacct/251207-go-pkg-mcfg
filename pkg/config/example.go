@@ -29,31 +29,39 @@ func GenerateExampleYAML[T any](cfg T) []byte {
 	return buf.Bytes()
 }
 
-// RunGenerateExampleTest 生成配置示例文件的测试入口。
-//
-// 外部项目可在测试中调用此函数。
+// ConfigTestHelper 配置测试辅助工具
 //
 // 使用示例：
 //
-//	func TestGenerateExample(t *testing.T) {
-//	    pkgconfig.RunGenerateExampleTest(t, config.DefaultConfig())
+//	var helper = config.ConfigTestHelper[Config]{
+//	    ExamplePath: "config/config.example.yaml",
+//	    ConfigPath:  "config/config.yaml",
 //	}
-func RunGenerateExampleTest[T any](t *testing.T, defaultConfig T) {
+//
+//	func TestGenerateExample(t *testing.T) { helper.GenerateExample(t, DefaultConfig()) }
+//	func TestConfigKeysValid(t *testing.T) { helper.ValidateKeys(t) }
+type ConfigTestHelper[T any] struct {
+	ExamplePath string // 示例文件相对路径（相对于 go.mod 所在目录）
+	ConfigPath  string // 配置文件相对路径（相对于 go.mod 所在目录）
+}
+
+// GenerateExample 根据默认配置生成示例文件
+func (h *ConfigTestHelper[T]) GenerateExample(t *testing.T, defaultConfig T) {
 	t.Helper()
 
-	projectRoot, err := FindProjectRoot(1) // skip=1 跳过本函数，获取调用者(测试文件)位置
+	projectRoot, err := FindProjectRoot(1)
 	if err != nil {
 		t.Fatalf("无法找到项目根目录: %v", err)
 	}
 
 	yamlBytes := GenerateExampleYAML(defaultConfig)
 
-	configDir := filepath.Join(projectRoot, "config")
-	if err := os.MkdirAll(configDir, 0755); err != nil {
-		t.Fatalf("创建 config 目录失败: %v", err)
+	outputPath := filepath.Join(projectRoot, h.ExamplePath)
+	outputDir := filepath.Dir(outputPath)
+	if err := os.MkdirAll(outputDir, 0755); err != nil {
+		t.Fatalf("创建目录失败: %v", err)
 	}
 
-	outputPath := filepath.Join(configDir, "config.example.yaml")
 	if err := os.WriteFile(outputPath, yamlBytes, 0644); err != nil {
 		t.Fatalf("写入配置文件失败: %v", err)
 	}
@@ -61,38 +69,30 @@ func RunGenerateExampleTest[T any](t *testing.T, defaultConfig T) {
 	t.Logf("✅ 已生成配置示例文件: %s", outputPath)
 }
 
-// RunConfigKeysValidTest 校验配置文件的测试入口。
-//
-// 验证 config.yaml 不包含 config.example.yaml 中不存在的配置项。
-//
-// 使用示例：
-//
-//	func TestConfigKeysValid(t *testing.T) {
-//	    pkgconfig.RunConfigKeysValidTest(t)
-//	}
-func RunConfigKeysValidTest(t *testing.T) {
+// ValidateKeys 校验配置文件中的键名是否都在示例文件中定义
+func (h *ConfigTestHelper[T]) ValidateKeys(t *testing.T) {
 	t.Helper()
 
-	projectRoot, err := FindProjectRoot(1) // skip=1 跳过本函数，获取调用者(测试文件)位置
+	projectRoot, err := FindProjectRoot(1)
 	if err != nil {
 		t.Fatalf("无法找到项目根目录: %v", err)
 	}
 
-	configPath := filepath.Join(projectRoot, "config", "config.yaml")
-	examplePath := filepath.Join(projectRoot, "config", "config.example.yaml")
+	configPath := filepath.Join(projectRoot, h.ConfigPath)
+	examplePath := filepath.Join(projectRoot, h.ExamplePath)
 
 	if _, err := os.Stat(configPath); os.IsNotExist(err) {
-		t.Skip("config.yaml 不存在，跳过验证")
+		t.Skipf("%s 不存在，跳过验证", h.ConfigPath)
 	}
 
 	exampleKeys, err := loadYAMLKeys(examplePath)
 	if err != nil {
-		t.Fatalf("无法加载 config.example.yaml: %v", err)
+		t.Fatalf("无法加载 %s: %v", h.ExamplePath, err)
 	}
 
 	configKeys, err := loadYAMLKeys(configPath)
 	if err != nil {
-		t.Fatalf("无法加载 config.yaml: %v", err)
+		t.Fatalf("无法加载 %s: %v", h.ConfigPath, err)
 	}
 
 	validKeyMap := make(map[string]bool, len(exampleKeys))
@@ -108,7 +108,7 @@ func RunConfigKeysValidTest(t *testing.T) {
 	}
 
 	if len(invalidKeys) > 0 {
-		t.Errorf("config.yaml 包含以下无效配置项:\n")
+		t.Errorf("%s 包含以下无效配置项:\n", h.ConfigPath)
 		for _, key := range invalidKeys {
 			t.Errorf("  - %s", key)
 		}

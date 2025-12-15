@@ -91,7 +91,13 @@
 //
 // # 测试辅助
 //
-// 提供测试入口函数，方便外部项目集成：
-//   - [RunGenerateExampleTest] - 生成配置示例文件
-//   - [RunConfigKeysValidTest] - 校验配置文件不包含无效键
+// 使用 [ConfigTestHelper] 提供测试辅助功能：
+//
+//	var helper = config.ConfigTestHelper[Config]{
+//	    ExamplePath: "config/config.example.yaml",
+//	    ConfigPath:  "config/config.yaml",
+//	}
+//
+//	func TestGenerateExample(t *testing.T) { helper.GenerateExample(t, DefaultConfig()) }
+//	func TestConfigKeysValid(t *testing.T) { helper.ValidateKeys(t) }
 package config
