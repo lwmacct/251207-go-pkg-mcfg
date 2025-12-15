@@ -9,22 +9,26 @@ import (
 	"strings"
 	"time"
 
+	"github.com/knadh/koanf/parsers/json"
 	"github.com/knadh/koanf/parsers/yaml"
-	"github.com/knadh/koanf/providers/file"
+	"github.com/knadh/koanf/providers/rawbytes"
 	"github.com/knadh/koanf/providers/structs"
 	"github.com/knadh/koanf/v2"
 	"github.com/urfave/cli/v3"
+
+	"github.com/lwmacct/251207-go-pkg-config/pkg/tmpl"
 )
 
 // loadOptions 配置加载选项。
 type loadOptions struct {
-	cmd         *cli.Command
-	configPaths []string
-	baseDir     string // 路径基准目录，用于将相对路径转换为绝对路径
-	baseDirSet  bool   // 是否显式设置了 baseDir（区分空字符串和未设置）
-	envPrefix   string
-	envBindings map[string]string
-	envBindKey  string
+	cmd                  *cli.Command
+	configPaths          []string
+	baseDir              string // 路径基准目录，用于将相对路径转换为绝对路径
+	baseDirSet           bool   // 是否显式设置了 baseDir（区分空字符串和未设置）
+	envPrefix            string
+	envBindings          map[string]string
+	envBindKey           string
+	noTemplateExpansion  bool // 是否禁用配置文件模板展开（默认启用）
 }
 
 // Option 配置加载选项函数。
@@ -141,6 +145,21 @@ func WithEnvBindKey(key string) Option {
 	}
 }
 
+// WithoutTemplateExpansion 禁用配置文件的模板展开功能。
+//
+// 默认情况下，配置文件会自动进行模板展开，支持以下语法：
+//
+//   - {{env "VAR"}} 或 {{env "VAR" "default"}} - 获取环境变量
+//   - {{.VAR | default "fallback"}} - Taskfile 风格直接访问环境变量
+//   - {{coalesce .VAR1 .VAR2 "default"}} - 返回第一个非空值
+//
+// 使用此选项可禁用模板展开，配置文件中的 {{...}} 将作为字面量保留。
+func WithoutTemplateExpansion() Option {
+	return func(o *loadOptions) {
+		o.noTemplateExpansion = true
+	}
+}
+
 // DefaultPaths 返回默认配置文件搜索路径。
 //
 // appName 可选，若提供则包含应用专属配置路径。
@@ -224,11 +243,29 @@ func Load[T any](defaultConfig T, opts ...Option) (*T, error) {
 		}
 	}
 	for _, path := range paths {
-		if err := k.Load(file.Provider(path), yaml.Parser()); err == nil {
-			slog.Debug("Loaded config from file", "path", path)
-			configLoaded = true
-			break
+		// 尝试读取配置文件
+		content, err := os.ReadFile(path)
+		if err != nil {
+			continue // 文件不存在或无法读取，尝试下一个路径
 		}
+
+		// 默认启用模板展开，在解析前处理模板
+		if !options.noTemplateExpansion {
+			expanded, err := tmpl.ExpandTemplate(string(content))
+			if err != nil {
+				return nil, fmt.Errorf("expand template in %s: %w", path, err)
+			}
+			content = []byte(expanded)
+		}
+
+		// 使用 rawbytes 加载处理后的内容
+		if err := k.Load(rawbytes.Provider(content), parserForPath(path)); err != nil {
+			return nil, fmt.Errorf("parse config file %s: %w", path, err)
+		}
+
+		slog.Debug("Loaded config from file", "path", path, "templateExpansion", !options.noTemplateExpansion)
+		configLoaded = true
+		break
 	}
 
 	if len(options.configPaths) > 0 && !configLoaded {
@@ -386,6 +423,18 @@ func generateEnvBindings(prefix string, koanfKeys []string) map[string]string {
 		bindings[prefix+envKey] = key
 	}
 	return bindings
+}
+
+// parserForPath 根据文件扩展名返回对应的解析器。
+//
+// 支持的格式：
+//   - .json → JSON 解析器
+//   - .yaml, .yml, 其他 → YAML 解析器 (默认)
+func parserForPath(path string) koanf.Parser {
+	if strings.ToLower(filepath.Ext(path)) == ".json" {
+		return json.Parser()
+	}
+	return yaml.Parser()
 }
 
 // applyCLIFlagsGeneric 通过反射将用户明确指定的 CLI flags 应用到 koanf 实例。

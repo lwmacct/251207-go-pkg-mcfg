@@ -2,7 +2,9 @@
 //
 // # 特性
 //
-// 使用泛型支持任意配置结构体类型，配置加载优先级 (从低到高)：
+// 使用泛型支持任意配置结构体类型，支持 YAML 和 JSON 格式（根据文件扩展名自动检测）。
+//
+// 配置加载优先级 (从低到高)：
 //  1. 默认值 - 通过 defaultConfig 参数传入
 //  2. 配置文件 - 通过 WithConfigPaths 选项设置
 //  3. 环境变量(前缀) - 通过 WithEnvPrefix 选项启用
@@ -11,12 +13,12 @@
 //
 // # 快速开始
 //
-// 定义配置结构体，使用 koanf 和 comment 标签：
+// 定义配置结构体，使用 koanf 和 desc 标签：
 //
 //	type Config struct {
-//	    Name    string        `koanf:"name"    comment:"应用名称"`
-//	    Debug   bool          `koanf:"debug"   comment:"调试模式"`
-//	    Timeout time.Duration `koanf:"timeout" comment:"超时时间"`
+//	    Name    string        `koanf:"name"    desc:"应用名称"`
+//	    Debug   bool          `koanf:"debug"   desc:"调试模式"`
+//	    Timeout time.Duration `koanf:"timeout" desc:"超时时间"`
 //	}
 //
 // 加载配置（使用函数选项模式）：
@@ -66,6 +68,35 @@
 //
 // 代码中的绑定优先级高于配置文件中的绑定。
 //
+// # 模板展开
+//
+// 配置文件默认启用模板展开功能，在解析前处理模板语法（YAML 和 JSON 均支持）。
+// 使用 [WithoutTemplateExpansion] 可禁用此功能。
+//
+// 支持的模板函数：
+//   - env: 获取环境变量 {{env "VAR"}} 或 {{env "VAR" "default"}}
+//   - default: 管道式默认值 {{.VAR | default "fallback"}}
+//   - coalesce: 返回第一个非空值 {{coalesce .VAR1 .VAR2 "default"}}
+//
+// Taskfile 风格直接访问环境变量：
+//
+//	api_key: "{{.OPENAI_API_KEY}}"
+//	model: "{{.MODEL | default \"gpt-4\"}}"
+//
+// 配置文件示例：
+//
+//	# config.yaml
+//	api_key: "{{env `OPENAI_API_KEY`}}"
+//	model: "{{.LLM_MODEL | default `gpt-4`}}"
+//	base_url: "{{coalesce .PROD_URL .DEV_URL `http://localhost:8080`}}"
+//
+// 禁用模板展开：
+//
+//	cfg, err := config.Load(Config{},
+//	    config.WithConfigPaths("config.yaml"),
+//	    config.WithoutTemplateExpansion(), // 禁用模板展开
+//	)
+//
 // # CLI Flag 映射
 //
 // 支持两种 CLI flag 格式 (优先使用 kebab-case)：
@@ -88,6 +119,11 @@
 //
 //	yaml := config.GenerateExampleYAML(defaultConfig)
 //	os.WriteFile("config.example.yaml", yaml, 0644)
+//
+// 使用 [GenerateExampleJSON] 生成 JSON 示例文件（JSON 不支持注释）：
+//
+//	jsonBytes := config.GenerateExampleJSON(defaultConfig)
+//	os.WriteFile("config.example.json", jsonBytes, 0644)
 //
 // # 测试辅助
 //

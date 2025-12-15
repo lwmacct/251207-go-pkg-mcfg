@@ -575,11 +575,11 @@ func TestGenerateExampleYAML(t *testing.T) {
 		{
 			name: "basic types",
 			cfg: struct {
-				Name    string  `koanf:"name" comment:"应用名称"`
-				Debug   bool    `koanf:"debug" comment:"调试模式"`
-				Port    int     `koanf:"port" comment:"端口号"`
-				Rate    float64 `koanf:"rate" comment:"速率"`
-				Retries uint    `koanf:"retries" comment:"重试次数"`
+				Name    string  `koanf:"name" desc:"应用名称"`
+				Debug   bool    `koanf:"debug" desc:"调试模式"`
+				Port    int     `koanf:"port" desc:"端口号"`
+				Rate    float64 `koanf:"rate" desc:"速率"`
+				Retries uint    `koanf:"retries" desc:"重试次数"`
 			}{Name: "test-app", Debug: true, Port: 8080, Rate: 1.5, Retries: 3},
 			contains: []string{
 				"# 配置示例文件",
@@ -593,16 +593,16 @@ func TestGenerateExampleYAML(t *testing.T) {
 		{
 			name: "nested struct",
 			cfg: struct {
-				Name   string `koanf:"name" comment:"应用名称"`
+				Name   string `koanf:"name" desc:"应用名称"`
 				Server struct {
-					Host string `koanf:"host" comment:"服务器地址"`
-					Port int    `koanf:"port" comment:"服务器端口"`
-				} `koanf:"server" comment:"服务器配置"`
+					Host string `koanf:"host" desc:"服务器地址"`
+					Port int    `koanf:"port" desc:"服务器端口"`
+				} `koanf:"server" desc:"服务器配置"`
 			}{
 				Name: "nested-app",
 				Server: struct {
-					Host string `koanf:"host" comment:"服务器地址"`
-					Port int    `koanf:"port" comment:"服务器端口"`
+					Host string `koanf:"host" desc:"服务器地址"`
+					Port int    `koanf:"port" desc:"服务器端口"`
 				}{Host: "localhost", Port: 9090},
 			},
 			contains: []string{"server:", `host: "localhost"`, "port: 9090", "# 服务器配置"},
@@ -610,30 +610,30 @@ func TestGenerateExampleYAML(t *testing.T) {
 		{
 			name: "duration",
 			cfg: struct {
-				Timeout time.Duration `koanf:"timeout" comment:"超时时间"`
+				Timeout time.Duration `koanf:"timeout" desc:"超时时间"`
 			}{Timeout: 30 * time.Second},
 			contains: []string{"timeout: 30s", "# 超时时间"},
 		},
 		{
 			name: "slice",
 			cfg: struct {
-				Hosts []string `koanf:"hosts" comment:"主机列表"`
-				Empty []string `koanf:"empty" comment:"空列表"`
+				Hosts []string `koanf:"hosts" desc:"主机列表"`
+				Empty []string `koanf:"empty" desc:"空列表"`
 			}{Hosts: []string{"host1", "host2"}, Empty: []string{}},
 			contains: []string{"hosts:", "- host1", "- host2", "empty: []"},
 		},
 		{
 			name: "map",
 			cfg: struct {
-				Labels map[string]string `koanf:"labels" comment:"标签"`
-				Empty  map[string]string `koanf:"empty" comment:"空映射"`
+				Labels map[string]string `koanf:"labels" desc:"标签"`
+				Empty  map[string]string `koanf:"empty" desc:"空映射"`
 			}{Labels: map[string]string{"env": "prod"}, Empty: map[string]string{}},
 			contains: []string{"labels:", "empty: {}"},
 		},
 		{
 			name: "skip untagged",
 			cfg: struct {
-				Name     string `koanf:"name" comment:"应用名称"`
+				Name     string `koanf:"name" desc:"应用名称"`
 				Internal string // 无 koanf 标签
 			}{Name: "test", Internal: "should-not-appear"},
 			contains: []string{"name:"},
@@ -830,4 +830,323 @@ func TestGenerateEnvBindings(t *testing.T) {
 			assert.Equal(t, tt.expected, bindings)
 		})
 	}
+}
+
+// =============================================================================
+// 模板展开测试 (默认启用)
+// =============================================================================
+
+func TestTemplateExpansion(t *testing.T) {
+	type Config struct {
+		APIKey  string `koanf:"api_key"`
+		Model   string `koanf:"model"`
+		BaseURL string `koanf:"base_url"`
+	}
+
+	t.Run("env function", func(t *testing.T) {
+		t.Setenv("TEST_API_KEY", "sk-test-12345")
+
+		configContent := `
+api_key: '{{env "TEST_API_KEY"}}'
+model: "gpt-4"
+base_url: "https://api.openai.com"
+`
+		configPath := writeTempConfig(t, configContent)
+		cfg, err := Load(Config{}, WithConfigPaths(configPath)) // 默认启用模板展开
+		require.NoError(t, err)
+
+		assert.Equal(t, "sk-test-12345", cfg.APIKey)
+		assert.Equal(t, "gpt-4", cfg.Model)
+	})
+
+	t.Run("env with default value", func(t *testing.T) {
+		configContent := `
+api_key: '{{env "NONEXISTENT_KEY" "default-key"}}'
+model: "gpt-3.5-turbo"
+`
+		configPath := writeTempConfig(t, configContent)
+		cfg, err := Load(Config{}, WithConfigPaths(configPath))
+		require.NoError(t, err)
+
+		assert.Equal(t, "default-key", cfg.APIKey)
+	})
+
+	t.Run("default function pipeline", func(t *testing.T) {
+		configContent := `
+api_key: '{{env "NONEXISTENT_KEY" | default "fallback-key"}}'
+model: "claude-3"
+`
+		configPath := writeTempConfig(t, configContent)
+		cfg, err := Load(Config{}, WithConfigPaths(configPath))
+		require.NoError(t, err)
+
+		assert.Equal(t, "fallback-key", cfg.APIKey)
+	})
+
+	t.Run("taskfile style direct access", func(t *testing.T) {
+		t.Setenv("MY_MODEL", "claude-haiku")
+		t.Setenv("MY_BASE_URL", "https://api.anthropic.com")
+
+		configContent := `
+api_key: "test-key"
+model: '{{.MY_MODEL}}'
+base_url: '{{.MY_BASE_URL | default "https://default.com"}}'
+`
+		configPath := writeTempConfig(t, configContent)
+		cfg, err := Load(Config{}, WithConfigPaths(configPath))
+		require.NoError(t, err)
+
+		assert.Equal(t, "claude-haiku", cfg.Model)
+		assert.Equal(t, "https://api.anthropic.com", cfg.BaseURL)
+	})
+
+	t.Run("coalesce function", func(t *testing.T) {
+		t.Setenv("SECONDARY_KEY", "secondary-value")
+
+		configContent := `
+api_key: '{{coalesce .PRIMARY_KEY .SECONDARY_KEY "final-default"}}'
+model: "test"
+`
+		configPath := writeTempConfig(t, configContent)
+		cfg, err := Load(Config{}, WithConfigPaths(configPath))
+		require.NoError(t, err)
+
+		assert.Equal(t, "secondary-value", cfg.APIKey)
+	})
+
+	t.Run("coalesce all empty returns default", func(t *testing.T) {
+		configContent := `
+api_key: '{{coalesce .MISSING1 .MISSING2 "final-default"}}'
+model: "test"
+`
+		configPath := writeTempConfig(t, configContent)
+		cfg, err := Load(Config{}, WithConfigPaths(configPath))
+		require.NoError(t, err)
+
+		assert.Equal(t, "final-default", cfg.APIKey)
+	})
+
+	t.Run("WithoutTemplateExpansion disables expansion", func(t *testing.T) {
+		configContent := `
+api_key: '{{env "TEST_KEY"}}'
+model: "test"
+`
+		configPath := writeTempConfig(t, configContent)
+		cfg, err := Load(Config{}, WithConfigPaths(configPath), WithoutTemplateExpansion()) // 显式禁用
+		require.NoError(t, err)
+
+		// 未展开，保持原样
+		assert.Equal(t, "{{env \"TEST_KEY\"}}", cfg.APIKey)
+	})
+
+	t.Run("template syntax error", func(t *testing.T) {
+		configContent := `
+api_key: '{{env "TEST_KEY"'
+model: "test"
+`
+		configPath := writeTempConfig(t, configContent)
+		_, err := Load(Config{}, WithConfigPaths(configPath)) // 默认启用，语法错误会报错
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "expand template")
+	})
+
+	t.Run("complex real-world example", func(t *testing.T) {
+		t.Setenv("OPENROUTER_API_KEY", "or-key-12345")
+		t.Setenv("LLM_MODEL", "anthropic/claude-haiku-4.5")
+
+		configContent := `
+api_key: '{{coalesce .OPENROUTER_API_KEY .ANTHROPIC_API_KEY "sk-default"}}'
+model: '{{.LLM_MODEL | default "gpt-4"}}'
+base_url: '{{env "LLM_BASE_URL" "https://openrouter.ai/api/v1"}}'
+`
+		configPath := writeTempConfig(t, configContent)
+		cfg, err := Load(Config{}, WithConfigPaths(configPath))
+		require.NoError(t, err)
+
+		assert.Equal(t, "or-key-12345", cfg.APIKey)
+		assert.Equal(t, "anthropic/claude-haiku-4.5", cfg.Model)
+		assert.Equal(t, "https://openrouter.ai/api/v1", cfg.BaseURL)
+	})
+}
+
+// =============================================================================
+// JSON 格式支持测试
+// =============================================================================
+
+// writeTempJSONConfig 创建临时 JSON 配置文件
+func writeTempJSONConfig(t *testing.T, content string) string {
+	t.Helper()
+	tmpFile, err := os.CreateTemp("", "config_test_*.json")
+	require.NoError(t, err, "Failed to create temp file")
+	_, err = tmpFile.WriteString(content)
+	require.NoError(t, err, "Failed to write temp file")
+	_ = tmpFile.Close()
+	t.Cleanup(func() { _ = os.Remove(tmpFile.Name()) })
+	return tmpFile.Name()
+}
+
+func TestLoadWithJSONConfig(t *testing.T) {
+	type ServerConfig struct {
+		Host    string        `koanf:"host"`
+		Port    int           `koanf:"port"`
+		Timeout time.Duration `koanf:"timeout"`
+	}
+	type Config struct {
+		Name   string       `koanf:"name"`
+		Debug  bool         `koanf:"debug"`
+		Server ServerConfig `koanf:"server"`
+	}
+
+	jsonContent := `{
+  "name": "json-app",
+  "debug": true,
+  "server": {
+    "host": "0.0.0.0",
+    "port": 9090,
+    "timeout": "60s"
+  }
+}`
+
+	tmpFile := writeTempJSONConfig(t, jsonContent)
+
+	cfg, err := Load(
+		Config{Name: "default", Server: ServerConfig{Port: 8080}},
+		WithConfigPaths(tmpFile),
+	)
+	require.NoError(t, err)
+
+	a := assert.New(t)
+	a.Equal("json-app", cfg.Name)
+	a.True(cfg.Debug)
+	a.Equal("0.0.0.0", cfg.Server.Host)
+	a.Equal(9090, cfg.Server.Port)
+	a.Equal(60*time.Second, cfg.Server.Timeout)
+}
+
+func TestParserForPath(t *testing.T) {
+	tests := []struct {
+		name     string
+		path     string
+		isJSON   bool
+	}{
+		{"yaml extension", "config.yaml", false},
+		{"yml extension", "config.yml", false},
+		{"json extension", "config.json", true},
+		{"uppercase YAML", "CONFIG.YAML", false},
+		{"uppercase JSON", "CONFIG.JSON", true},
+		{"no extension", "config", false},
+		{"unknown extension", "config.conf", false},
+		{"json in path", "/path/to/config.json", true},
+		{"yaml in path", "/etc/app/config.yaml", false},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			parser := parserForPath(tt.path)
+			// 通过解析简单内容来验证 parser 类型
+			if tt.isJSON {
+				// JSON parser 应该能解析 JSON
+				result, err := parser.Unmarshal([]byte(`{"key": "value"}`))
+				require.NoError(t, err)
+				assert.Equal(t, "value", result["key"])
+			} else {
+				// YAML parser 应该能解析 YAML
+				result, err := parser.Unmarshal([]byte("key: value"))
+				require.NoError(t, err)
+				assert.Equal(t, "value", result["key"])
+			}
+		})
+	}
+}
+
+func TestJSONTemplateExpansion(t *testing.T) {
+	type Config struct {
+		APIKey string `koanf:"api_key"`
+		Model  string `koanf:"model"`
+	}
+
+	t.Run("env function in JSON", func(t *testing.T) {
+		t.Setenv("JSON_TEST_KEY", "sk-json-12345")
+
+		// 使用反引号包裹模板参数，避免 JSON 转义引号与模板语法冲突
+		jsonContent := "{\"api_key\": \"{{env `JSON_TEST_KEY`}}\", \"model\": \"gpt-4\"}"
+		tmpFile := writeTempJSONConfig(t, jsonContent)
+		cfg, err := Load(Config{}, WithConfigPaths(tmpFile))
+		require.NoError(t, err)
+
+		assert.Equal(t, "sk-json-12345", cfg.APIKey)
+		assert.Equal(t, "gpt-4", cfg.Model)
+	})
+
+	t.Run("default value in JSON", func(t *testing.T) {
+		// 使用反引号包裹模板参数
+		jsonContent := "{\"api_key\": \"{{env `NONEXISTENT` `default-json-key`}}\", \"model\": \"claude-3\"}"
+		tmpFile := writeTempJSONConfig(t, jsonContent)
+		cfg, err := Load(Config{}, WithConfigPaths(tmpFile))
+		require.NoError(t, err)
+
+		assert.Equal(t, "default-json-key", cfg.APIKey)
+	})
+
+	t.Run("disable template in JSON", func(t *testing.T) {
+		jsonContent := "{\"api_key\": \"{{env `TEST`}}\", \"model\": \"test\"}"
+		tmpFile := writeTempJSONConfig(t, jsonContent)
+		cfg, err := Load(Config{}, WithConfigPaths(tmpFile), WithoutTemplateExpansion())
+		require.NoError(t, err)
+
+		assert.Equal(t, "{{env `TEST`}}", cfg.APIKey)
+	})
+}
+
+func TestJSONPartialOverride(t *testing.T) {
+	type Config struct {
+		Name    string `koanf:"name"`
+		Debug   bool   `koanf:"debug"`
+		Port    int    `koanf:"port"`
+		Timeout int    `koanf:"timeout"`
+	}
+
+	jsonContent := `{
+  "name": "json-override",
+  "port": 9000
+}`
+
+	tmpFile := writeTempJSONConfig(t, jsonContent)
+	cfg, err := Load(
+		Config{Name: "default", Debug: true, Port: 8080, Timeout: 30},
+		WithConfigPaths(tmpFile),
+	)
+	require.NoError(t, err)
+
+	a := assert.New(t)
+	a.Equal("json-override", cfg.Name, "specified field should be overridden")
+	a.True(cfg.Debug, "unspecified field should keep default")
+	a.Equal(9000, cfg.Port, "specified field should be overridden")
+	a.Equal(30, cfg.Timeout, "unspecified field should keep default")
+}
+
+func TestJSONWithEnvPrefix(t *testing.T) {
+	type Config struct {
+		Name  string `koanf:"name"`
+		Debug bool   `koanf:"debug"`
+	}
+
+	jsonContent := `{
+  "name": "json-app",
+  "debug": false
+}`
+
+	tmpFile := writeTempJSONConfig(t, jsonContent)
+	t.Setenv("JSONTEST_DEBUG", "true")
+
+	cfg, err := Load(
+		Config{Name: "default", Debug: false},
+		WithConfigPaths(tmpFile),
+		WithEnvPrefix("JSONTEST_"),
+	)
+	require.NoError(t, err)
+
+	a := assert.New(t)
+	a.Equal("json-app", cfg.Name, "from JSON file")
+	a.True(cfg.Debug, "env should override JSON file")
 }

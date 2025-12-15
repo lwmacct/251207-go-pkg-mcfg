@@ -1,5 +1,28 @@
 # go-pkg-config
 
+<!--TOC-->
+
+- [特性](#特性) `:28+9`
+- [安装](#安装) `:37+6`
+- [快速开始](#快速开始) `:43+188`
+  - [1. 定义配置结构体](#1-定义配置结构体) `:45+34`
+  - [2. 加载配置](#2-加载配置) `:79+35`
+  - [3. 环境变量](#3-环境变量) `:114+54`
+  - [4. 测试驱动的配置管理](#4-测试驱动的配置管理) `:168+63`
+- [API 参考](#api-参考) `:231+92`
+  - [config.Load](#configload) `:233+14`
+  - [config.WithConfigPaths](#configwithconfigpaths) `:247+8`
+  - [config.WithEnvPrefix](#configwithenvprefix) `:255+8`
+  - [config.WithEnvBinding / config.WithEnvBindings](#configwithenvbinding-configwithenvbindings) `:263+9`
+  - [config.WithEnvBindKey](#configwithenvbindkey) `:272+8`
+  - [config.WithCommand](#configwithcommand) `:280+8`
+  - [config.DefaultPaths](#configdefaultpaths) `:288+13`
+  - [config.GenerateExampleYAML](#configgenerateexampleyaml) `:301+8`
+  - [config.ConfigTestHelper](#configconfigtesthelper) `:309+14`
+- [License](#license) `:323+3`
+
+<!--TOC-->
+
 通用的 Go 配置加载库，支持泛型，可被外部项目复用。
 
 ## 特性
@@ -92,14 +115,15 @@ cfg, err := config.Load(DefaultConfig(),
 
 #### 前缀匹配（WithEnvPrefix）
 
-| 环境变量 | koanf key |
-|---------|-----------|
-| `MYAPP_SERVER_ADDR` | `server.addr` |
-| `MYAPP_SERVER_TIMEOUT` | `server.timeout` |
-| `MYAPP_DEBUG` | `debug` |
+| 环境变量                     | koanf key              |
+| ---------------------------- | ---------------------- |
+| `MYAPP_SERVER_ADDR`          | `server.addr`          |
+| `MYAPP_SERVER_TIMEOUT`       | `server.timeout`       |
+| `MYAPP_DEBUG`                | `debug`                |
 | `MYAPP_CLIENT_REV_AUTH_USER` | `client.rev-auth-user` |
 
 转换规则：
+
 1. 移除前缀（如 `MYAPP_`）
 2. 转为小写
 3. 点号 `.` 和连字符 `-` 都转为下划线 `_`
@@ -197,6 +221,7 @@ go test -v -run TestConfigKeysValid ./internal/config/...
 ```
 
 **用途**：
+
 - 防止配置项拼写错误（如 `servr.addr` 写成 `server.addr`）
 - 检测已废弃的配置项
 - CI 集成，确保配置文件与代码同步
@@ -212,6 +237,7 @@ func Load[T any](defaultConfig T, opts ...Option) (*T, error)
 ```
 
 加载配置，按优先级合并：
+
 1. `defaultConfig` - 默认值（最低优先级）
 2. `WithConfigPaths` - 配置文件（按顺序搜索，找到第一个即停止）
 3. `WithEnvPrefix` - 环境变量（前缀匹配）
@@ -266,6 +292,7 @@ func DefaultPaths(appName ...string) []string
 ```
 
 返回默认配置文件搜索路径：
+
 - `config.yaml`
 - `config/config.yaml`
 - `~/.{appName}.yaml`（如果提供 appName）

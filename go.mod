@@ -3,8 +3,10 @@ module github.com/lwmacct/251207-go-pkg-config
 go 1.25.0
 
 require (
+	github.com/knadh/koanf/parsers/json v1.0.0
 	github.com/knadh/koanf/parsers/yaml v1.1.0
 	github.com/knadh/koanf/providers/file v1.2.0
+	github.com/knadh/koanf/providers/rawbytes v1.0.0
 	github.com/knadh/koanf/providers/structs v1.0.0
 	github.com/knadh/koanf/v2 v2.3.0
 	github.com/lwmacct/251125-go-pkg-logger v0.0.8

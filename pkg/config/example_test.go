@@ -26,16 +26,16 @@ func Example_defaultPaths() {
 
 // Example_generateExampleYAML 演示如何根据配置结构体生成 YAML 示例
 func Example_generateExampleYAML() {
-	// 定义配置结构体，使用 koanf 和 comment 标签
+	// 定义配置结构体，使用 koanf 和 desc 标签
 	type ServerConfig struct {
-		Host string `koanf:"host" comment:"服务器主机地址"`
-		Port int    `koanf:"port" comment:"服务器端口"`
+		Host string `koanf:"host" desc:"服务器主机地址"`
+		Port int    `koanf:"port" desc:"服务器端口"`
 	}
 	type AppConfig struct {
-		Name    string        `koanf:"name"    comment:"应用名称"`
-		Debug   bool          `koanf:"debug"   comment:"是否启用调试模式"`
-		Timeout time.Duration `koanf:"timeout" comment:"超时时间"`
-		Server  ServerConfig  `koanf:"server"  comment:"服务器配置"`
+		Name    string        `koanf:"name"    desc:"应用名称"`
+		Debug   bool          `koanf:"debug"   desc:"是否启用调试模式"`
+		Timeout time.Duration `koanf:"timeout" desc:"超时时间"`
+		Server  ServerConfig  `koanf:"server"  desc:"服务器配置"`
 	}
 
 	// 创建默认配置
@@ -232,4 +232,85 @@ redis:
 	// Output:
 	// Name: from-config
 	// Redis URL: redis://localhost:6379
+}
+
+// Example_generateExampleJSON 演示如何根据配置结构体生成 JSON 示例
+func Example_generateExampleJSON() {
+	type ServerConfig struct {
+		Host string `koanf:"host" json:"host"`
+		Port int    `koanf:"port" json:"port"`
+	}
+	type AppConfig struct {
+		Name   string       `koanf:"name" json:"name"`
+		Debug  bool         `koanf:"debug" json:"debug"`
+		Server ServerConfig `koanf:"server" json:"server"`
+	}
+
+	defaultCfg := AppConfig{
+		Name:  "example-app",
+		Debug: false,
+		Server: ServerConfig{
+			Host: "localhost",
+			Port: 8080,
+		},
+	}
+
+	// 生成 JSON 示例 (注意：JSON 不支持注释)
+	jsonBytes := config.GenerateExampleJSON(defaultCfg)
+	fmt.Println(string(jsonBytes))
+
+	// Output:
+	// {
+	//   "name": "example-app",
+	//   "debug": false,
+	//   "server": {
+	//     "host": "localhost",
+	//     "port": 8080
+	//   }
+	// }
+}
+
+// Example_load_withJSONConfig 演示如何加载 JSON 格式的配置文件
+//
+// Load 函数会根据文件扩展名自动选择解析器：
+//   - .yaml, .yml → YAML 解析器
+//   - .json → JSON 解析器
+func Example_load_withJSONConfig() {
+	type Config struct {
+		Name  string `koanf:"name"`
+		Debug bool   `koanf:"debug"`
+	}
+
+	// 创建临时 JSON 配置文件
+	configContent := `{
+  "name": "json-app",
+  "debug": true
+}`
+	tmpFile := "/tmp/example_json_test.json"
+	if err := os.WriteFile(tmpFile, []byte(configContent), 0644); err != nil {
+		fmt.Println("创建临时文件失败:", err)
+		return
+	}
+	defer func() { _ = os.Remove(tmpFile) }()
+
+	defaultCfg := Config{
+		Name:  "default-app",
+		Debug: false,
+	}
+
+	// 根据 .json 扩展名自动使用 JSON 解析器
+	cfg, err := config.Load(defaultCfg,
+		config.WithConfigPaths(tmpFile),
+	)
+	if err != nil {
+		fmt.Println("加载失败:", err)
+		return
+	}
+
+	fmt.Println("Name:", cfg.Name)
+	fmt.Println("Debug:", cfg.Debug)
+
+	// Output:
+	// Name: json-app
+	// Debug: true
 }

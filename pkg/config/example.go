@@ -2,31 +2,190 @@ package config
 
 import (
 	"bytes"
+	"encoding/json"
 	"fmt"
 	"os"
 	"path/filepath"
 	"reflect"
 	"runtime"
+	"strings"
 	"testing"
+	"time"
 
-	"github.com/knadh/koanf/parsers/yaml"
+	kjson "github.com/knadh/koanf/parsers/json"
+	kyaml "github.com/knadh/koanf/parsers/yaml"
 	"github.com/knadh/koanf/providers/file"
 	"github.com/knadh/koanf/v2"
+	"gopkg.in/yaml.v3"
 )
 
 // GenerateExampleYAML 根据配置结构体生成带注释的 YAML 示例。
 //
-// 通过反射读取 koanf 和 comment tag 自动生成。
+// 通过反射读取 koanf 和 desc tag 自动生成，使用 yaml.v3 Node API 确保正确的序列化。
 //
 // 使用示例：
 //
 //	yaml := config.GenerateExampleYAML(DefaultConfig())
 //	os.WriteFile("config/config.example.yaml", yaml, 0644)
 func GenerateExampleYAML[T any](cfg T) []byte {
+	node := structToNode(reflect.ValueOf(cfg), reflect.TypeOf(cfg))
+	node.HeadComment = "配置示例文件, 复制此文件为 config.yaml 并根据需要修改"
+
 	var buf bytes.Buffer
-	buf.WriteString("# 配置示例文件, 复制此文件为 config.yaml 并根据需要修改\n")
-	writeStructYAML(&buf, reflect.ValueOf(cfg), reflect.TypeOf(cfg), 0)
+	enc := yaml.NewEncoder(&buf)
+	enc.SetIndent(2)
+	_ = enc.Encode(node)
+	_ = enc.Close()
 	return buf.Bytes()
+}
+
+// GenerateExampleJSON 根据配置结构体生成 JSON 示例。
+//
+// 注意：JSON 不支持注释，desc tag 将被忽略。如需注释说明，请参考 YAML 示例。
+//
+// 使用示例：
+//
+//	jsonBytes := config.GenerateExampleJSON(DefaultConfig())
+//	os.WriteFile("config/config.example.json", jsonBytes, 0644)
+func GenerateExampleJSON[T any](cfg T) []byte {
+	var buf bytes.Buffer
+	enc := json.NewEncoder(&buf)
+	enc.SetIndent("", "  ")
+	_ = enc.Encode(cfg)
+	return buf.Bytes()
+}
+
+// structToNode 将结构体转换为带注释的 yaml.Node。
+func structToNode(val reflect.Value, typ reflect.Type) *yaml.Node {
+	// 处理指针类型
+	if val.Kind() == reflect.Ptr {
+		if val.IsNil() {
+			return &yaml.Node{Kind: yaml.ScalarNode, Tag: "!!null"}
+		}
+		val = val.Elem()
+		typ = typ.Elem()
+	}
+
+	node := &yaml.Node{Kind: yaml.MappingNode}
+
+	for i := 0; i < typ.NumField(); i++ {
+		field := typ.Field(i)
+		fieldVal := val.Field(i)
+
+		key := field.Tag.Get("koanf")
+		if key == "" {
+			continue
+		}
+		comment := field.Tag.Get("desc")
+
+		// Key node
+		keyNode := &yaml.Node{Kind: yaml.ScalarNode, Value: key}
+
+		// Value node
+		var valNode *yaml.Node
+
+		// 嵌套结构体（排除 time.Duration 和 time.Time）
+		if field.Type.Kind() == reflect.Struct &&
+			field.Type != reflect.TypeOf(time.Duration(0)) &&
+			field.Type != reflect.TypeOf(time.Time{}) {
+			valNode = structToNode(fieldVal, field.Type)
+			keyNode.HeadComment = "\n" + comment // 结构体注释放在 key 上方，前面加空行
+		} else {
+			valNode = valueToNode(fieldVal, field.Type)
+			valNode.LineComment = comment // 标量注释放在行尾
+		}
+
+		node.Content = append(node.Content, keyNode, valNode)
+	}
+
+	return node
+}
+
+// valueToNode 将值转换为 yaml.Node。
+func valueToNode(val reflect.Value, typ reflect.Type) *yaml.Node {
+	// 特殊类型处理
+	switch typ {
+	case reflect.TypeOf(time.Duration(0)):
+		return &yaml.Node{
+			Kind:  yaml.ScalarNode,
+			Value: val.Interface().(time.Duration).String(),
+		}
+	case reflect.TypeOf(time.Time{}):
+		return &yaml.Node{
+			Kind:  yaml.ScalarNode,
+			Value: val.Interface().(time.Time).Format(time.RFC3339),
+		}
+	}
+
+	switch val.Kind() {
+	case reflect.String:
+		return &yaml.Node{
+			Kind:  yaml.ScalarNode,
+			Value: val.String(),
+			Style: yaml.DoubleQuotedStyle,
+		}
+
+	case reflect.Bool:
+		return &yaml.Node{
+			Kind:  yaml.ScalarNode,
+			Value: fmt.Sprintf("%t", val.Bool()),
+		}
+
+	case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64:
+		return &yaml.Node{
+			Kind:  yaml.ScalarNode,
+			Value: fmt.Sprintf("%d", val.Int()),
+		}
+
+	case reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64:
+		return &yaml.Node{
+			Kind:  yaml.ScalarNode,
+			Value: fmt.Sprintf("%d", val.Uint()),
+		}
+
+	case reflect.Float32, reflect.Float64:
+		return &yaml.Node{
+			Kind:  yaml.ScalarNode,
+			Value: fmt.Sprintf("%v", val.Float()),
+		}
+
+	case reflect.Slice:
+		node := &yaml.Node{Kind: yaml.SequenceNode}
+		if val.Len() == 0 {
+			node.Style = yaml.FlowStyle // [] 形式
+		} else {
+			for j := 0; j < val.Len(); j++ {
+				elem := val.Index(j)
+				elemNode := valueToNode(elem, elem.Type())
+				// slice 元素不使用引号样式，保持简洁
+				elemNode.Style = 0
+				node.Content = append(node.Content, elemNode)
+			}
+		}
+		return node
+
+	case reflect.Map:
+		node := &yaml.Node{Kind: yaml.MappingNode}
+		if val.Len() == 0 {
+			node.Style = yaml.FlowStyle // {} 形式
+		} else {
+			iter := val.MapRange()
+			for iter.Next() {
+				k, v := iter.Key(), iter.Value()
+				node.Content = append(node.Content,
+					&yaml.Node{Kind: yaml.ScalarNode, Value: fmt.Sprintf("%v", k.Interface())},
+					valueToNode(v, v.Type()),
+				)
+			}
+		}
+		return node
+
+	default:
+		return &yaml.Node{
+			Kind:  yaml.ScalarNode,
+			Value: fmt.Sprintf("%v", val.Interface()),
+		}
+	}
 }
 
 // ConfigTestHelper 配置测试辅助工具
@@ -85,12 +244,12 @@ func (h *ConfigTestHelper[T]) ValidateKeys(t *testing.T) {
 		t.Skipf("%s 不存在，跳过验证", h.ConfigPath)
 	}
 
-	exampleKeys, err := loadYAMLKeys(examplePath)
+	exampleKeys, err := loadConfigKeys(examplePath)
 	if err != nil {
 		t.Fatalf("无法加载 %s: %v", h.ExamplePath, err)
 	}
 
-	configKeys, err := loadYAMLKeys(configPath)
+	configKeys, err := loadConfigKeys(configPath)
 	if err != nil {
 		t.Fatalf("无法加载 %s: %v", h.ConfigPath, err)
 	}
@@ -137,86 +296,17 @@ func FindProjectRoot(skip int) (string, error) {
 	}
 }
 
-// loadYAMLKeys 加载 YAML 文件并返回所有配置键。
-func loadYAMLKeys(path string) ([]string, error) {
+// loadConfigKeys 加载配置文件并返回所有配置键（支持 YAML 和 JSON）。
+func loadConfigKeys(path string) ([]string, error) {
 	k := koanf.New(".")
-	if err := k.Load(file.Provider(path), yaml.Parser()); err != nil {
+	var parser koanf.Parser
+	if strings.ToLower(filepath.Ext(path)) == ".json" {
+		parser = kjson.Parser()
+	} else {
+		parser = kyaml.Parser()
+	}
+	if err := k.Load(file.Provider(path), parser); err != nil {
 		return nil, fmt.Errorf("加载文件失败: %w", err)
 	}
 	return k.Keys(), nil
-}
-
-// writeStructYAML 递归写入结构体的 YAML 格式。
-func writeStructYAML(buf *bytes.Buffer, val reflect.Value, typ reflect.Type, indent int) {
-	// 处理指针类型
-	if val.Kind() == reflect.Ptr {
-		if val.IsNil() {
-			return
-		}
-		val = val.Elem()
-		typ = typ.Elem()
-	}
-
-	prefix := ""
-	for i := 0; i < indent; i++ {
-		prefix += "  "
-	}
-
-	for i := 0; i < typ.NumField(); i++ {
-		field := typ.Field(i)
-		fieldVal := val.Field(i)
-
-		koanfKey := field.Tag.Get("koanf")
-		comment := field.Tag.Get("comment")
-		if koanfKey == "" {
-			continue
-		}
-
-		// 处理嵌套结构体
-		if field.Type.Kind() == reflect.Struct && field.Type.String() != "time.Duration" && field.Type.String() != "time.Time" {
-			fmt.Fprintf(buf, "\n%s# %s\n", prefix, comment)
-			fmt.Fprintf(buf, "%s%s:\n", prefix, koanfKey)
-			writeStructYAML(buf, fieldVal, field.Type, indent+1)
-			continue
-		}
-
-		// 根据字段类型输出不同格式
-		switch fieldVal.Kind() {
-		case reflect.String:
-			fmt.Fprintf(buf, "%s%s: %q # %s\n", prefix, koanfKey, fieldVal.String(), comment)
-		case reflect.Bool:
-			fmt.Fprintf(buf, "%s%s: %t # %s\n", prefix, koanfKey, fieldVal.Bool(), comment)
-		case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64:
-			if field.Type.String() == "time.Duration" {
-				fmt.Fprintf(buf, "%s%s: %s # %s\n", prefix, koanfKey, fieldVal.Interface(), comment)
-			} else {
-				fmt.Fprintf(buf, "%s%s: %d # %s\n", prefix, koanfKey, fieldVal.Int(), comment)
-			}
-		case reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64:
-			fmt.Fprintf(buf, "%s%s: %d # %s\n", prefix, koanfKey, fieldVal.Uint(), comment)
-		case reflect.Float32, reflect.Float64:
-			fmt.Fprintf(buf, "%s%s: %v # %s\n", prefix, koanfKey, fieldVal.Float(), comment)
-		case reflect.Slice:
-			if fieldVal.Len() == 0 {
-				fmt.Fprintf(buf, "%s%s: [] # %s\n", prefix, koanfKey, comment)
-			} else {
-				fmt.Fprintf(buf, "%s%s: # %s\n", prefix, koanfKey, comment)
-				for j := 0; j < fieldVal.Len(); j++ {
-					fmt.Fprintf(buf, "%s  - %v\n", prefix, fieldVal.Index(j).Interface())
-				}
-			}
-		case reflect.Map:
-			if fieldVal.Len() == 0 {
-				fmt.Fprintf(buf, "%s%s: {} # %s\n", prefix, koanfKey, comment)
-			} else {
-				fmt.Fprintf(buf, "%s%s: # %s\n", prefix, koanfKey, comment)
-				iter := fieldVal.MapRange()
-				for iter.Next() {
-					fmt.Fprintf(buf, "%s  %v: %v\n", prefix, iter.Key().Interface(), iter.Value().Interface())
-				}
-			}
-		default:
-			fmt.Fprintf(buf, "%s%s: %v # %s\n", prefix, koanfKey, fieldVal.Interface(), comment)
-		}
-	}
 }
