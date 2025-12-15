@@ -2,25 +2,30 @@
 
 <!--TOC-->
 
-- [特性](#特性) `:29+9`
-- [安装](#安装) `:38+6`
-- [快速开始](#快速开始) `:44+188`
-  - [1. 定义配置结构体](#1-定义配置结构体) `:46+34`
-  - [2. 加载配置](#2-加载配置) `:80+35`
-  - [3. 环境变量](#3-环境变量) `:115+54`
-  - [4. 测试驱动的配置管理](#4-测试驱动的配置管理) `:169+63`
-- [API 参考](#api-参考) `:232+100`
-  - [config.Load](#configload) `:234+14`
-  - [config.WithConfigPaths](#configwithconfigpaths) `:248+8`
-  - [config.WithEnvPrefix](#configwithenvprefix) `:256+8`
-  - [config.WithEnvBinding / config.WithEnvBindings](#configwithenvbinding-configwithenvbindings) `:264+9`
-  - [config.WithEnvBindKey](#configwithenvbindkey) `:273+8`
-  - [config.WithCommand](#configwithcommand) `:281+8`
-  - [config.DefaultPaths](#configdefaultpaths) `:289+13`
-  - [config.GenerateExampleYAML](#configgenerateexampleyaml) `:302+8`
-  - [config.GenerateExampleJSON](#configgenerateexamplejson) `:310+8`
-  - [config.ConfigTestHelper](#configconfigtesthelper) `:318+14`
-- [License](#license) `:332+3`
+- [特性](#特性) `:34+10`
+- [安装](#安装) `:44+6`
+- [快速开始](#快速开始) `:50+188`
+  - [1. 定义配置结构体](#1-定义配置结构体) `:52+34`
+  - [2. 加载配置](#2-加载配置) `:86+35`
+  - [3. 环境变量](#3-环境变量) `:121+54`
+  - [4. 测试驱动的配置管理](#4-测试驱动的配置管理) `:175+63`
+- [模板语法](#模板语法) `:238+52`
+  - [基本语法](#基本语法) `:246+10`
+  - [内置函数](#内置函数) `:256+21`
+  - [使用示例](#使用示例) `:277+13`
+- [API 参考](#api-参考) `:290+108`
+  - [config.Load](#configload) `:292+14`
+  - [config.WithConfigPaths](#configwithconfigpaths) `:306+8`
+  - [config.WithEnvPrefix](#configwithenvprefix) `:314+8`
+  - [config.WithEnvBinding / config.WithEnvBindings](#configwithenvbinding-configwithenvbindings) `:322+9`
+  - [config.WithEnvBindKey](#configwithenvbindkey) `:331+8`
+  - [config.WithCommand](#configwithcommand) `:339+8`
+  - [config.DefaultPaths](#configdefaultpaths) `:347+13`
+  - [config.GenerateExampleYAML](#configgenerateexampleyaml) `:360+8`
+  - [config.GenerateExampleJSON](#configgenerateexamplejson) `:368+8`
+  - [config.ConfigTestHelper](#configconfigtesthelper) `:376+14`
+  - [tmpl.ExpandTemplate](#tmplexpandtemplate) `:390+8`
+- [License](#license) `:398+3`
 
 <!--TOC-->
 
@@ -34,6 +39,7 @@
 - **环境变量支持**：前缀匹配 + 直接绑定，适合 Docker/K8s 容器化部署
 - **自动映射**：CLI flag 名称自动从 `koanf` tag 推导（snake_case → kebab-case）
 - **示例生成**：自动根据结构体生成带注释的 YAML 配置示例
+- **模板展开**：支持环境变量引用、默认值和多级 fallback
 
 ## 安装
 
@@ -55,12 +61,12 @@ import (
 )
 
 type Config struct {
-    Server ServerConfig `koanf:"server" comment:"服务端配置"`
+    Server ServerConfig `koanf:"server" desc:"服务端配置"`
 }
 
 type ServerConfig struct {
-    Addr    string        `koanf:"addr" comment:"监听地址"`
-    Timeout time.Duration `koanf:"timeout" comment:"超时时间"`
+    Addr    string        `koanf:"addr" desc:"监听地址"`
+    Timeout time.Duration `koanf:"timeout" desc:"超时时间"`
 }
 
 func DefaultConfig() Config {
@@ -211,7 +217,7 @@ server:
   timeout: 30s # 超时时间
 ```
 
-**工作原理**：通过反射读取结构体的 `koanf` 和 `comment` tag，自动生成完整的 YAML 示例。
+**工作原理**：通过反射读取结构体的 `koanf` 和 `desc` tag，自动生成完整的 YAML 示例。
 
 #### 校验配置文件（TestConfigKeysValid）
 
@@ -228,6 +234,58 @@ go test -v -run TestConfigKeysValid ./internal/config/...
 - CI 集成，确保配置文件与代码同步
 
 如果存在无效配置项，测试将失败并列出所有问题项。如果配置文件不存在，测试会自动跳过。
+
+## 模板语法
+
+本库提供 `tmpl` 包用于模板展开，支持环境变量引用和多级 fallback 机制。
+
+```bash
+go get github.com/lwmacct/251207-go-pkg-config/pkg/tmpl
+```
+
+### 基本语法
+
+| 语法                        | 说明             | 示例                                      |
+| --------------------------- | ---------------- | ----------------------------------------- |
+| `{{.VAR}}`                  | 直接访问环境变量 | `{{.HOME}}`                               |
+| `{{env "VAR"}}`             | env 函数方式     | `{{env "API_KEY"}}`                       |
+| `{{env "VAR" "default"}}`   | 带默认值         | `{{env "PORT" "8080"}}`                   |
+| `{{.VAR \| default "val"}}` | pipeline 默认值  | `{{.HOST \| default "localhost"}}`        |
+| `{{coalesce .A .B "val"}}`  | 多级 fallback    | `{{coalesce .PRIMARY .BACKUP "default"}}` |
+
+### 内置函数
+
+#### env
+
+获取环境变量，支持可选默认值：
+
+- `{{env "VAR"}}` - 不存在返回空字符串
+- `{{env "VAR" "default"}}` - 不存在返回默认值
+
+#### default
+
+pipeline 友好的默认值函数：
+
+- `{{.VAR | default "fallback"}}` - 值为空时返回 fallback
+
+#### coalesce
+
+返回第一个非空值：
+
+- `{{coalesce .VAR1 .VAR2 .VAR3 "default"}}` - 按优先级返回
+
+### 使用示例
+
+```go
+import "github.com/lwmacct/251207-go-pkg-config/pkg/tmpl"
+
+// 展开模板
+result, err := tmpl.ExpandTemplate(`{
+  "host": "{{.DB_HOST | default "localhost"}}",
+  "port": "{{env "DB_PORT" "5432"}}",
+  "key": "{{coalesce .PRIMARY_KEY .BACKUP_KEY "sk-default"}}"
+}`)
+```
 
 ## API 参考
 
@@ -328,6 +386,14 @@ func (h *ConfigTestHelper[T]) ValidateKeys(t *testing.T)
 ```
 
 测试辅助工具，用于在单元测试中生成配置示例和校验配置文件。路径相对于 `go.mod` 所在目录。
+
+### tmpl.ExpandTemplate
+
+```go
+func ExpandTemplate(text string) (string, error)
+```
+
+展开模板字符串中的环境变量引用。支持 `{{.VAR}}`、`env`、`default`、`coalesce` 语法。
 
 ## License
 
