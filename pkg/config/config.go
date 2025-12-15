@@ -198,6 +198,11 @@ func Load[T any](defaultConfig T, opts ...Option) (*T, error) {
 		}
 	}
 
+	// 默认使用 DefaultPaths 作为配置文件搜索路径
+	if len(options.configPaths) == 0 {
+		options.configPaths = DefaultPaths()
+	}
+
 	k := koanf.New(".")
 
 	// 1️⃣ 加载默认配置 (最低优先级)
