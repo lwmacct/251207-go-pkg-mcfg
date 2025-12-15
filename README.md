@@ -86,10 +86,10 @@ func Load(opts ...config.Option) (*Config, error) {
 ### 2. 加载配置
 
 ```go
-// 仅使用默认值
+// 使用默认值 + 默认配置文件路径 (config.yaml, config/config.yaml)
 cfg, err := config.Load(DefaultConfig())
 
-// 使用配置文件
+// 使用应用专属配置文件路径 (.myapp.yaml, ~/.myapp.yaml, /etc/myapp/config.yaml 等)
 cfg, err := config.Load(DefaultConfig(),
     config.WithConfigPaths(config.DefaultPaths("myapp")...),
 )
