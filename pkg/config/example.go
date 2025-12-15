@@ -16,7 +16,7 @@ import (
 	kyaml "github.com/knadh/koanf/parsers/yaml"
 	"github.com/knadh/koanf/providers/file"
 	"github.com/knadh/koanf/v2"
-	"gopkg.in/yaml.v3"
+	"go.yaml.in/yaml/v3"
 )
 
 // GenerateExampleYAML 根据配置结构体生成带注释的 YAML 示例。

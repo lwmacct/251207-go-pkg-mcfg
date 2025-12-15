@@ -2,24 +2,25 @@
 
 <!--TOC-->
 
-- [特性](#特性) `:28+9`
-- [安装](#安装) `:37+6`
-- [快速开始](#快速开始) `:43+188`
-  - [1. 定义配置结构体](#1-定义配置结构体) `:45+34`
-  - [2. 加载配置](#2-加载配置) `:79+35`
-  - [3. 环境变量](#3-环境变量) `:114+54`
-  - [4. 测试驱动的配置管理](#4-测试驱动的配置管理) `:168+63`
-- [API 参考](#api-参考) `:231+92`
-  - [config.Load](#configload) `:233+14`
-  - [config.WithConfigPaths](#configwithconfigpaths) `:247+8`
-  - [config.WithEnvPrefix](#configwithenvprefix) `:255+8`
-  - [config.WithEnvBinding / config.WithEnvBindings](#configwithenvbinding-configwithenvbindings) `:263+9`
-  - [config.WithEnvBindKey](#configwithenvbindkey) `:272+8`
-  - [config.WithCommand](#configwithcommand) `:280+8`
-  - [config.DefaultPaths](#configdefaultpaths) `:288+13`
-  - [config.GenerateExampleYAML](#configgenerateexampleyaml) `:301+8`
-  - [config.ConfigTestHelper](#configconfigtesthelper) `:309+14`
-- [License](#license) `:323+3`
+- [特性](#特性) `:29+9`
+- [安装](#安装) `:38+6`
+- [快速开始](#快速开始) `:44+188`
+  - [1. 定义配置结构体](#1-定义配置结构体) `:46+34`
+  - [2. 加载配置](#2-加载配置) `:80+35`
+  - [3. 环境变量](#3-环境变量) `:115+54`
+  - [4. 测试驱动的配置管理](#4-测试驱动的配置管理) `:169+63`
+- [API 参考](#api-参考) `:232+100`
+  - [config.Load](#configload) `:234+14`
+  - [config.WithConfigPaths](#configwithconfigpaths) `:248+8`
+  - [config.WithEnvPrefix](#configwithenvprefix) `:256+8`
+  - [config.WithEnvBinding / config.WithEnvBindings](#configwithenvbinding-configwithenvbindings) `:264+9`
+  - [config.WithEnvBindKey](#configwithenvbindkey) `:273+8`
+  - [config.WithCommand](#configwithcommand) `:281+8`
+  - [config.DefaultPaths](#configdefaultpaths) `:289+13`
+  - [config.GenerateExampleYAML](#configgenerateexampleyaml) `:302+8`
+  - [config.GenerateExampleJSON](#configgenerateexamplejson) `:310+8`
+  - [config.ConfigTestHelper](#configconfigtesthelper) `:318+14`
+- [License](#license) `:332+3`
 
 <!--TOC-->
 
@@ -304,7 +305,15 @@ func DefaultPaths(appName ...string) []string
 func GenerateExampleYAML[T any](cfg T) []byte
 ```
 
-根据配置结构体生成带注释的 YAML 示例，通过反射读取 `koanf` 和 `comment` tag。
+根据配置结构体生成带注释的 YAML 示例，通过反射读取 `koanf` 和 `desc` tag。
+
+### config.GenerateExampleJSON
+
+```go
+func GenerateExampleJSON[T any](cfg T) []byte
+```
+
+根据配置结构体生成 JSON 示例。注意：JSON 不支持注释，`desc` tag 将被忽略。
 
 ### config.ConfigTestHelper
 
