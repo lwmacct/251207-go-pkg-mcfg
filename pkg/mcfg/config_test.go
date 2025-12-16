@@ -537,10 +537,10 @@ func TestLoadWithCommand_StringSlice(t *testing.T) {
 }
 
 // =============================================================================
-// GenerateExampleYAML 测试
+// ExampleYAML 测试
 // =============================================================================
 
-func TestGenerateExampleYAML(t *testing.T) {
+func TestExampleYAML(t *testing.T) {
 	tests := []struct {
 		name     string
 		cfg      any
@@ -618,7 +618,7 @@ func TestGenerateExampleYAML(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			yaml := string(GenerateExampleYAML(tt.cfg))
+			yaml := string(ExampleYAML(tt.cfg))
 			a := assert.New(t)
 			for _, s := range tt.contains {
 				a.Contains(yaml, s)

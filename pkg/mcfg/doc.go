@@ -115,15 +115,15 @@
 //
 // # 生成配置示例
 //
-// 使用 [GenerateExampleYAML] 根据配置结构体生成带注释的 YAML 示例文件：
+// 使用 [ExampleYAML] 根据配置结构体序列化为带注释的 YAML：
 //
-//	yaml := mcfg.GenerateExampleYAML(defaultConfig)
+//	yaml := mcfg.ExampleYAML(defaultConfig)
 //	os.WriteFile("config.example.yaml", yaml, 0644)
 //
-// 使用 [GenerateExampleJSON] 生成 JSON 示例文件（JSON 不支持注释）：
+// 使用 [MarshalJSON] 序列化为 JSON：
 //
-//	jsonBytes := mcfg.GenerateExampleJSON(defaultConfig)
-//	os.WriteFile("config.example.json", jsonBytes, 0644)
+//	jsonBytes := mcfg.MarshalJSON(defaultConfig)
+//	os.WriteFile("config.json", jsonBytes, 0644)
 //
 // # 测试辅助
 //
@@ -134,6 +134,6 @@
 //	    ConfigPath:  "config/config.yaml",
 //	}
 //
-//	func TestGenerateExample(t *testing.T) { helper.GenerateExample(t, DefaultConfig()) }
+//	func TestWriteExample(t *testing.T) { helper.WriteExampleFile(t, DefaultConfig()) }
 //	func TestConfigKeysValid(t *testing.T) { helper.ValidateKeys(t) }
 package mcfg

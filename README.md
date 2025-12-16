@@ -180,18 +180,18 @@ var helper = mcfg.ConfigTestHelper[Config]{
     ConfigPath:  "config/config.yaml",
 }
 
-func TestGenerateExample(t *testing.T) { helper.GenerateExample(t, DefaultConfig()) }
+func TestWriteExample(t *testing.T) { helper.WriteExampleFile(t, DefaultConfig()) }
 func TestConfigKeysValid(t *testing.T) { helper.ValidateKeys(t) }
 ```
 
 路径为相对路径，相对于 `go.mod` 所在目录。
 
-#### 生成配置示例（TestGenerateExample）
+#### 生成配置示例（TestWriteExample）
 
 根据 `DefaultConfig()` 结构体自动生成带注释的示例文件：
 
 ```bash
-go test -v -run TestGenerateExample ./internal/config/...
+go test -v -run TestWriteExample ./internal/config/...
 ```
 
 生成的示例文件：

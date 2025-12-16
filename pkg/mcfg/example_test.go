@@ -24,8 +24,8 @@ func Example_defaultPaths() {
 	// 带应用名路径数量: 5
 }
 
-// Example_generateExampleYAML 演示如何根据配置结构体生成 YAML 示例
-func Example_generateExampleYAML() {
+// Example_exampleYAML 演示如何根据配置结构体生成 YAML 示例
+func Example_exampleYAML() {
 	// 定义配置结构体，使用 koanf 和 desc 标签
 	type ServerConfig struct {
 		Host string `koanf:"host" desc:"服务器主机地址"`
@@ -50,7 +50,7 @@ func Example_generateExampleYAML() {
 	}
 
 	// 生成 YAML 示例
-	yaml := mcfg.GenerateExampleYAML(defaultCfg)
+	yaml := mcfg.ExampleYAML(defaultCfg)
 	fmt.Println(string(yaml))
 
 	// Output:
@@ -234,8 +234,8 @@ redis:
 	// Redis URL: redis://localhost:6379
 }
 
-// Example_generateExampleJSON 演示如何根据配置结构体生成 JSON 示例
-func Example_generateExampleJSON() {
+// Example_marshalJSON 演示如何根据配置结构体生成 JSON
+func Example_marshalJSON() {
 	type ServerConfig struct {
 		Host string `koanf:"host" json:"host"`
 		Port int    `koanf:"port" json:"port"`
@@ -255,8 +255,8 @@ func Example_generateExampleJSON() {
 		},
 	}
 
-	// 生成 JSON 示例 (注意：JSON 不支持注释)
-	jsonBytes := mcfg.GenerateExampleJSON(defaultCfg)
+	// 生成 JSON
+	jsonBytes := mcfg.MarshalJSON(defaultCfg)
 	fmt.Println(string(jsonBytes))
 
 	// Output:

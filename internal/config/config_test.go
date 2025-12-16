@@ -11,5 +11,5 @@ var helper = mcfg.ConfigTestHelper[Config]{
 	ConfigPath:  "config/config.yaml",
 }
 
-func TestGenerateExample(t *testing.T) { helper.GenerateExample(t, DefaultConfig()) }
+func TestWriteExample(t *testing.T) { helper.WriteExampleFile(t, DefaultConfig()) }
 func TestConfigKeysValid(t *testing.T) { helper.ValidateKeys(t) }

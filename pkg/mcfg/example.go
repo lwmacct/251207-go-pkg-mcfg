@@ -11,40 +11,55 @@ import (
 	"testing"
 	"time"
 
+	"github.com/knadh/koanf/parsers/yaml"
 	"github.com/knadh/koanf/providers/file"
+	"github.com/knadh/koanf/providers/structs"
 	"github.com/knadh/koanf/v2"
-	"go.yaml.in/yaml/v3"
+	yamlv3 "go.yaml.in/yaml/v3"
 )
 
-// GenerateExampleYAML 根据配置结构体生成带注释的 YAML 示例。
+// ExampleYAML 将配置结构体序列化为带注释的 YAML。
 //
-// 通过反射读取 koanf 和 desc tag 自动生成，使用 yaml.v3 Node API 确保正确的序列化。
+// 通过 desc tag 自动生成注释，适用于生成 config.example.yaml。
 //
 // 使用示例：
 //
-//	yaml := config.GenerateExampleYAML(DefaultConfig())
+//	yaml := mcfg.ExampleYAML(DefaultConfig())
 //	os.WriteFile("config/config.example.yaml", yaml, 0644)
-func GenerateExampleYAML[T any](cfg T) []byte {
+func ExampleYAML[T any](cfg T) []byte {
 	node := structToNode(reflect.ValueOf(cfg), reflect.TypeOf(cfg))
 	node.HeadComment = "配置示例文件, 复制此文件为 config.yaml 并根据需要修改"
 
 	var buf bytes.Buffer
-	enc := yaml.NewEncoder(&buf)
+	enc := yamlv3.NewEncoder(&buf)
 	enc.SetIndent(2)
 	_ = enc.Encode(node)
 	_ = enc.Close()
 	return buf.Bytes()
 }
 
-// GenerateExampleJSON 根据配置结构体生成 JSON 示例。
+// MarshalYAML 将配置结构体序列化为 YAML（无注释）。
 //
-// 注意：JSON 不支持注释，desc tag 将被忽略。如需注释说明，请参考 YAML 示例。
+// 使用 koanf 原生 Marshal，输出简洁。
 //
 // 使用示例：
 //
-//	jsonBytes := config.GenerateExampleJSON(DefaultConfig())
-//	os.WriteFile("config/config.example.json", jsonBytes, 0644)
-func GenerateExampleJSON[T any](cfg T) []byte {
+//	yaml := mcfg.MarshalYAML(cfg)
+//	os.WriteFile("config/config.yaml", yaml, 0644)
+func MarshalYAML[T any](cfg T) []byte {
+	k := koanf.New(".")
+	_ = k.Load(structs.Provider(cfg, "koanf"), nil)
+	data, _ := k.Marshal(yaml.Parser())
+	return data
+}
+
+// MarshalJSON 将配置结构体序列化为 JSON。
+//
+// 使用示例：
+//
+//	jsonBytes := mcfg.MarshalJSON(cfg)
+//	os.WriteFile("config/config.json", jsonBytes, 0644)
+func MarshalJSON[T any](cfg T) []byte {
 	var buf bytes.Buffer
 	enc := json.NewEncoder(&buf)
 	enc.SetIndent("", "  ")
@@ -52,18 +67,18 @@ func GenerateExampleJSON[T any](cfg T) []byte {
 	return buf.Bytes()
 }
 
-// structToNode 将结构体转换为带注释的 yaml.Node。
-func structToNode(val reflect.Value, typ reflect.Type) *yaml.Node {
+// structToNode 将结构体转换为带注释的 yamlv3.Node。
+func structToNode(val reflect.Value, typ reflect.Type) *yamlv3.Node {
 	// 处理指针类型
 	if val.Kind() == reflect.Ptr {
 		if val.IsNil() {
-			return &yaml.Node{Kind: yaml.ScalarNode, Tag: "!!null"}
+			return &yamlv3.Node{Kind: yamlv3.ScalarNode, Tag: "!!null"}
 		}
 		val = val.Elem()
 		typ = typ.Elem()
 	}
 
-	node := &yaml.Node{Kind: yaml.MappingNode}
+	node := &yamlv3.Node{Kind: yamlv3.MappingNode}
 
 	for i := 0; i < typ.NumField(); i++ {
 		field := typ.Field(i)
@@ -76,17 +91,24 @@ func structToNode(val reflect.Value, typ reflect.Type) *yaml.Node {
 		comment := field.Tag.Get("desc")
 
 		// Key node
-		keyNode := &yaml.Node{Kind: yaml.ScalarNode, Value: key}
+		keyNode := &yamlv3.Node{Kind: yamlv3.ScalarNode, Value: key}
 
 		// Value node
-		var valNode *yaml.Node
+		var valNode *yamlv3.Node
 
-		// 嵌套结构体（排除 time.Duration 和 time.Time）
-		if field.Type.Kind() == reflect.Struct &&
+		// 判断是否为复杂类型（结构体或数组）
+		isStruct := field.Type.Kind() == reflect.Struct &&
 			field.Type != reflect.TypeOf(time.Duration(0)) &&
-			field.Type != reflect.TypeOf(time.Time{}) {
-			valNode = structToNode(fieldVal, field.Type)
-			keyNode.HeadComment = "\n" + comment // 结构体注释放在 key 上方，前面加空行
+			field.Type != reflect.TypeOf(time.Time{})
+		isSlice := field.Type.Kind() == reflect.Slice
+
+		if isStruct || isSlice {
+			if isStruct {
+				valNode = structToNode(fieldVal, field.Type)
+			} else {
+				valNode = valueToNode(fieldVal, field.Type)
+			}
+			keyNode.HeadComment = "\n" + comment // 复杂类型注释放在 key 上方，前面加空行
 		} else {
 			valNode = valueToNode(fieldVal, field.Type)
 			valNode.LineComment = comment // 标量注释放在行尾
@@ -98,58 +120,58 @@ func structToNode(val reflect.Value, typ reflect.Type) *yaml.Node {
 	return node
 }
 
-// valueToNode 将值转换为 yaml.Node。
-func valueToNode(val reflect.Value, typ reflect.Type) *yaml.Node {
+// valueToNode 将值转换为 yamlv3.Node。
+func valueToNode(val reflect.Value, typ reflect.Type) *yamlv3.Node {
 	// 特殊类型处理
 	switch typ {
 	case reflect.TypeOf(time.Duration(0)):
-		return &yaml.Node{
-			Kind:  yaml.ScalarNode,
+		return &yamlv3.Node{
+			Kind:  yamlv3.ScalarNode,
 			Value: val.Interface().(time.Duration).String(),
 		}
 	case reflect.TypeOf(time.Time{}):
-		return &yaml.Node{
-			Kind:  yaml.ScalarNode,
+		return &yamlv3.Node{
+			Kind:  yamlv3.ScalarNode,
 			Value: val.Interface().(time.Time).Format(time.RFC3339),
 		}
 	}
 
 	switch val.Kind() {
 	case reflect.String:
-		return &yaml.Node{
-			Kind:  yaml.ScalarNode,
+		return &yamlv3.Node{
+			Kind:  yamlv3.ScalarNode,
 			Value: val.String(),
-			Style: yaml.DoubleQuotedStyle,
+			Style: yamlv3.DoubleQuotedStyle,
 		}
 
 	case reflect.Bool:
-		return &yaml.Node{
-			Kind:  yaml.ScalarNode,
+		return &yamlv3.Node{
+			Kind:  yamlv3.ScalarNode,
 			Value: fmt.Sprintf("%t", val.Bool()),
 		}
 
 	case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64:
-		return &yaml.Node{
-			Kind:  yaml.ScalarNode,
+		return &yamlv3.Node{
+			Kind:  yamlv3.ScalarNode,
 			Value: fmt.Sprintf("%d", val.Int()),
 		}
 
 	case reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64:
-		return &yaml.Node{
-			Kind:  yaml.ScalarNode,
+		return &yamlv3.Node{
+			Kind:  yamlv3.ScalarNode,
 			Value: fmt.Sprintf("%d", val.Uint()),
 		}
 
 	case reflect.Float32, reflect.Float64:
-		return &yaml.Node{
-			Kind:  yaml.ScalarNode,
+		return &yamlv3.Node{
+			Kind:  yamlv3.ScalarNode,
 			Value: fmt.Sprintf("%v", val.Float()),
 		}
 
 	case reflect.Slice:
-		node := &yaml.Node{Kind: yaml.SequenceNode}
+		node := &yamlv3.Node{Kind: yamlv3.SequenceNode}
 		if val.Len() == 0 {
-			node.Style = yaml.FlowStyle // [] 形式
+			node.Style = yamlv3.FlowStyle // [] 形式
 		} else {
 			for j := 0; j < val.Len(); j++ {
 				elem := val.Index(j)
@@ -162,15 +184,15 @@ func valueToNode(val reflect.Value, typ reflect.Type) *yaml.Node {
 		return node
 
 	case reflect.Map:
-		node := &yaml.Node{Kind: yaml.MappingNode}
+		node := &yamlv3.Node{Kind: yamlv3.MappingNode}
 		if val.Len() == 0 {
-			node.Style = yaml.FlowStyle // {} 形式
+			node.Style = yamlv3.FlowStyle // {} 形式
 		} else {
 			iter := val.MapRange()
 			for iter.Next() {
 				k, v := iter.Key(), iter.Value()
 				node.Content = append(node.Content,
-					&yaml.Node{Kind: yaml.ScalarNode, Value: fmt.Sprintf("%v", k.Interface())},
+					&yamlv3.Node{Kind: yamlv3.ScalarNode, Value: fmt.Sprintf("%v", k.Interface())},
 					valueToNode(v, v.Type()),
 				)
 			}
@@ -178,8 +200,8 @@ func valueToNode(val reflect.Value, typ reflect.Type) *yaml.Node {
 		return node
 
 	default:
-		return &yaml.Node{
-			Kind:  yaml.ScalarNode,
+		return &yamlv3.Node{
+			Kind:  yamlv3.ScalarNode,
 			Value: fmt.Sprintf("%v", val.Interface()),
 		}
 	}
@@ -189,20 +211,20 @@ func valueToNode(val reflect.Value, typ reflect.Type) *yaml.Node {
 //
 // 使用示例：
 //
-//	var helper = config.ConfigTestHelper[Config]{
+//	var helper = mcfg.ConfigTestHelper[Config]{
 //	    ExamplePath: "config/config.example.yaml",
 //	    ConfigPath:  "config/config.yaml",
 //	}
 //
-//	func TestGenerateExample(t *testing.T) { helper.GenerateExample(t, DefaultConfig()) }
+//	func TestWriteExample(t *testing.T) { helper.WriteExampleFile(t, DefaultConfig()) }
 //	func TestConfigKeysValid(t *testing.T) { helper.ValidateKeys(t) }
 type ConfigTestHelper[T any] struct {
 	ExamplePath string // 示例文件相对路径（相对于 go.mod 所在目录）
 	ConfigPath  string // 配置文件相对路径（相对于 go.mod 所在目录）
 }
 
-// GenerateExample 根据默认配置生成示例文件
-func (h *ConfigTestHelper[T]) GenerateExample(t *testing.T, defaultConfig T) {
+// WriteExampleFile 将示例配置写入文件
+func (h *ConfigTestHelper[T]) WriteExampleFile(t *testing.T, defaultConfig T) {
 	t.Helper()
 
 	projectRoot, err := FindProjectRoot(1)
@@ -210,7 +232,7 @@ func (h *ConfigTestHelper[T]) GenerateExample(t *testing.T, defaultConfig T) {
 		t.Fatalf("无法找到项目根目录: %v", err)
 	}
 
-	yamlBytes := GenerateExampleYAML(defaultConfig)
+	yamlBytes := ExampleYAML(defaultConfig)
 
 	outputPath := filepath.Join(projectRoot, h.ExamplePath)
 	outputDir := filepath.Dir(outputPath)
