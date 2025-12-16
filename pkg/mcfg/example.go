@@ -8,6 +8,7 @@ import (
 	"path/filepath"
 	"reflect"
 	"runtime"
+	"strings"
 	"testing"
 	"time"
 
@@ -111,7 +112,12 @@ func structToNode(val reflect.Value, typ reflect.Type) *yamlv3.Node {
 			keyNode.HeadComment = "\n" + comment // 复杂类型注释放在 key 上方，前面加空行
 		} else {
 			valNode = valueToNode(fieldVal, field.Type)
-			valNode.LineComment = comment // 标量注释放在行尾
+			// 多行注释放在 key 上方（HeadComment），单行注释放在行尾（LineComment）
+			if strings.Contains(comment, "\n") {
+				keyNode.HeadComment = "\n" + comment
+			} else {
+				valNode.LineComment = comment
+			}
 		}
 
 		node.Content = append(node.Content, keyNode, valNode)

@@ -1125,3 +1125,165 @@ func TestJSONWithEnvPrefix(t *testing.T) {
 	a.Equal("json-app", cfg.Name, "from JSON file")
 	a.True(cfg.Debug, "env should override JSON file")
 }
+
+// =============================================================================
+// 多行注释测试 (ExampleYAML)
+// =============================================================================
+
+func TestExampleYAML_MultilineComment(t *testing.T) {
+	t.Run("scalar with multiline desc", func(t *testing.T) {
+		cfg := struct {
+			APIKey string `koanf:"api_key" desc:"API 密钥\n用于身份验证"`
+		}{APIKey: "sk-test-123"}
+
+		yaml := string(ExampleYAML(cfg))
+
+		a := assert.New(t)
+		a.Contains(yaml, `api_key: "sk-test-123"`)
+		// 多行注释应该被正确处理（可能换行或保持单行）
+		a.Contains(yaml, "API 密钥")
+		a.Contains(yaml, "身份验证")
+	})
+
+	t.Run("struct with multiline desc", func(t *testing.T) {
+		type Server struct {
+			Host string `koanf:"host" desc:"主机"`
+			Port int    `koanf:"port" desc:"端口"`
+		}
+		cfg := struct {
+			Server Server `koanf:"server" desc:"服务器配置\n包含主机和端口设置"`
+		}{Server: Server{Host: "localhost", Port: 8080}}
+
+		yaml := string(ExampleYAML(cfg))
+
+		a := assert.New(t)
+		a.Contains(yaml, "server:")
+		a.Contains(yaml, "服务器配置")
+		a.Contains(yaml, "包含主机和端口设置")
+	})
+
+	t.Run("desc with special characters", func(t *testing.T) {
+		cfg := struct {
+			Timeout int `koanf:"timeout" desc:"超时时间 (单位: 秒)"`
+		}{Timeout: 30}
+
+		yaml := string(ExampleYAML(cfg))
+
+		a := assert.New(t)
+		a.Contains(yaml, "timeout: 30")
+		a.Contains(yaml, "超时时间 (单位: 秒)")
+	})
+
+	t.Run("desc with YAML special chars", func(t *testing.T) {
+		cfg := struct {
+			Pattern string `koanf:"pattern" desc:"匹配模式: [a-z]+ # 正则表达式"`
+		}{Pattern: "test"}
+
+		yaml := string(ExampleYAML(cfg))
+
+		a := assert.New(t)
+		a.Contains(yaml, `pattern: "test"`)
+		// 注释中的 # 不应破坏 YAML 结构
+		a.Contains(yaml, "匹配模式")
+	})
+
+	t.Run("desc with colon", func(t *testing.T) {
+		cfg := struct {
+			URL string `koanf:"url" desc:"服务地址: http://example.com"`
+		}{URL: "http://localhost"}
+
+		yaml := string(ExampleYAML(cfg))
+
+		a := assert.New(t)
+		a.Contains(yaml, `url: "http://localhost"`)
+		a.Contains(yaml, "服务地址")
+	})
+
+	t.Run("empty desc", func(t *testing.T) {
+		cfg := struct {
+			Name string `koanf:"name" desc:""`
+		}{Name: "test"}
+
+		yaml := string(ExampleYAML(cfg))
+
+		a := assert.New(t)
+		a.Contains(yaml, `name: "test"`)
+	})
+
+	t.Run("no desc tag", func(t *testing.T) {
+		cfg := struct {
+			Name string `koanf:"name"`
+		}{Name: "test"}
+
+		yaml := string(ExampleYAML(cfg))
+
+		a := assert.New(t)
+		a.Contains(yaml, `name: "test"`)
+		// 无 desc 标签时不应有注释
+	})
+
+	t.Run("mixed single and multiline", func(t *testing.T) {
+		type DB struct {
+			Host string `koanf:"host" desc:"数据库主机"`
+			Port int    `koanf:"port" desc:"端口号\n默认: 5432"`
+		}
+		cfg := struct {
+			Name string `koanf:"name" desc:"应用名称"`
+			DB   DB     `koanf:"db" desc:"数据库配置\n支持 PostgreSQL"`
+		}{
+			Name: "myapp",
+			DB:   DB{Host: "localhost", Port: 5432},
+		}
+
+		yaml := string(ExampleYAML(cfg))
+
+		a := assert.New(t)
+		a.Contains(yaml, `name: "myapp"`)
+		a.Contains(yaml, "应用名称")
+		a.Contains(yaml, "db:")
+		a.Contains(yaml, "数据库配置")
+		a.Contains(yaml, "PostgreSQL")
+		a.Contains(yaml, `host: "localhost"`)
+		a.Contains(yaml, "port: 5432")
+	})
+}
+
+// TestExampleYAML_MultilineCommentYAMLValidity 验证生成的 YAML 是否有效
+func TestExampleYAML_MultilineCommentYAMLValidity(t *testing.T) {
+	type Server struct {
+		Host    string `koanf:"host" desc:"服务主机\n支持 IPv4 和 IPv6"`
+		Port    int    `koanf:"port" desc:"监听端口"`
+		Timeout int    `koanf:"timeout" desc:"超时时间 (秒)\n0 表示不超时"`
+	}
+	type Config struct {
+		Name   string `koanf:"name" desc:"应用名称"`
+		Debug  bool   `koanf:"debug" desc:"调试模式\n启用后会输出详细日志"`
+		Server Server `koanf:"server" desc:"服务器配置\n包含网络相关设置"`
+	}
+
+	cfg := Config{
+		Name:  "test-app",
+		Debug: true,
+		Server: Server{
+			Host:    "0.0.0.0",
+			Port:    8080,
+			Timeout: 30,
+		},
+	}
+
+	yamlBytes := ExampleYAML(cfg)
+
+	// 验证生成的 YAML 可以被正确解析
+	var parsed Config
+	configPath := writeTempConfig(t, string(yamlBytes))
+	loaded, err := Load(Config{}, WithConfigPaths(configPath))
+	require.NoError(t, err, "Generated YAML should be valid and parseable")
+
+	parsed = *loaded
+	a := assert.New(t)
+	a.Equal("test-app", parsed.Name)
+	a.True(parsed.Debug)
+	a.Equal("0.0.0.0", parsed.Server.Host)
+	a.Equal(8080, parsed.Server.Port)
+	a.Equal(30, parsed.Server.Timeout)
+}
