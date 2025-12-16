@@ -16,7 +16,6 @@ import (
 
 	"github.com/lwmacct/251207-go-pkg-mcfg/internal/command"
 	"github.com/lwmacct/251207-go-pkg-mcfg/internal/config"
-	"github.com/lwmacct/251207-go-pkg-mcfg/pkg/mcfg"
 )
 
 // Command 服务器命令
@@ -53,12 +52,9 @@ var Command = &cli.Command{
 func action(ctx context.Context, cmd *cli.Command) error {
 
 	// 加载配置：默认值 → 配置文件 → 环境变量 → CLI flags
-	cfg, err := mcfg.LoadCmd(cmd, config.DefaultConfig(), version.GetAppRawName())
-	if err != nil {
-		return err
-	}
-	mux := http.NewServeMux()
 
+	cfg := config.LoadCmd(cmd)
+	mux := http.NewServeMux()
 	// 健康检查端点
 	mux.HandleFunc("GET /health", func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
