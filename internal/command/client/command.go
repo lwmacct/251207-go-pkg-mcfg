@@ -63,6 +63,14 @@ func action(ctx context.Context, cmd *cli.Command) error {
 
 func healthAction(ctx context.Context, cmd *cli.Command) error {
 
+	// cfg, err := mcfg.Load(
+	// 	config.DefaultConfig(),
+	// 	mcfg.WithCommand(cmd),
+	// 	mcfg.WithConfigPaths(
+	// 		mcfg.DefaultPaths(version.GetAppRawName())...,
+	// 	),
+	// )
+
 	cfg, err := config.Load(cmd, version.GetAppRawName())
 	if err != nil {
 		return err
