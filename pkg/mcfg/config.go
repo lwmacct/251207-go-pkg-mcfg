@@ -87,7 +87,7 @@ func WithBaseDir(path string) Option {
 
 // WithEnvPrefix 设置环境变量前缀。
 //
-// 启用后，会从环境变量加载配置，优先级高于配置文件，低于 CLI flags。
+// 启用后，会从环境变量加载配置。优先级：配置文件 < WithEnvPrefix < WithEnvBindKey < WithEnvBindings < CLI flags。
 //
 // 环境变量命名规则：
 //   - 前缀 + 大写的 koanf key
@@ -99,6 +99,7 @@ func WithBaseDir(path string) Option {
 //   - MYAPP_CLIENT_REV_AUTH_USER → client.rev-auth-user (支持连字符)
 //
 // 注意：通过反射自动生成所有 koanf key 的绑定，因此支持任意命名的 koanf key。
+// 若同一配置路径被 [WithEnvBindings] 或 [WithEnvBindKey] 显式绑定，则显式绑定优先。
 func WithEnvPrefix(prefix string) Option {
 	return func(o *loadOptions) {
 		o.envPrefix = prefix
@@ -213,12 +214,11 @@ func DefaultPaths(appName ...string) []string {
 //
 // 优先级 (从低到高)：
 //  1. 默认值 - 通过 defaultConfig 参数传入
-//  2. 配置文件 - 通过 WithConfigPaths 选项设置
-//  3. 环境变量(前缀) - 通过 WithEnvPrefix 选项启用
-//  4. 环境变量(绑定) - 通过 WithEnvBindKey(配置文件) 或 WithEnvBindings(代码) 设置
-//  5. CLI flags - 通过 WithCommand 选项设置，最高优先级
-//
-// 环境变量绑定优先级：代码中的 WithEnvBindings > 配置文件中的 envBindKey 节点。
+//  2. 配置文件 - 通过 [WithConfigPaths] 或 [WithAppName] 设置
+//  3. 环境变量(前缀) - 通过 [WithEnvPrefix] 自动生成绑定
+//  4. 环境变量(配置文件绑定) - 通过 [WithEnvBindKey] 从配置文件读取
+//  5. 环境变量(代码绑定) - 通过 [WithEnvBindings] 在代码中显式指定
+//  6. CLI flags - 通过 [WithCommand] 选项设置，最高优先级
 //
 // 泛型参数 T 为配置结构体类型，必须使用 koanf tag 标记字段。
 func Load[T any](defaultConfig T, opts ...Option) (*T, error) {

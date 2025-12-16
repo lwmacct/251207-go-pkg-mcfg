@@ -6,10 +6,13 @@
 //
 // 配置加载优先级 (从低到高)：
 //  1. 默认值 - 通过 defaultConfig 参数传入
-//  2. 配置文件 - 通过 WithConfigPaths 选项设置
-//  3. 环境变量(前缀) - 通过 WithEnvPrefix 选项启用
-//  4. 环境变量(绑定) - 通过 WithEnvBindKey(配置文件) 或 WithEnvBindings(代码) 设置
-//  5. CLI flags - 通过 WithCommand 选项设置，最高优先级
+//  2. 配置文件 - 通过 [WithConfigPaths] 或 [WithAppName] 设置
+//  3. 环境变量(前缀) - 通过 [WithEnvPrefix] 自动生成绑定
+//  4. 环境变量(配置文件绑定) - 通过 [WithEnvBindKey] 从配置文件读取
+//  5. 环境变量(代码绑定) - 通过 [WithEnvBindings] 在代码中显式指定
+//  6. CLI flags - 通过 [WithCommand] 选项设置，最高优先级
+//
+// 注意：同一配置路径若被多个环境变量绑定，代码绑定 > 配置文件绑定 > 前缀自动生成。
 //
 // # 快速开始
 //
@@ -37,6 +40,21 @@
 //	    mcfg.WithAppName("myapp"),
 //	    mcfg.WithEnvPrefix("MYAPP_"),
 //	    mcfg.WithCommand(cmd),
+//	)
+//
+// # 配置文件路径
+//
+// [WithAppName] 会自动生成默认搜索路径（见 [DefaultPaths]）：
+//   - .myapp.yaml (当前目录)
+//   - ~/.myapp.yaml (用户主目录)
+//   - /etc/myapp/config.yaml (系统配置)
+//   - config.yaml, config/config.yaml (通用路径)
+//
+// 若需自定义路径，使用 [WithConfigPaths]，它会覆盖 [WithAppName] 的自动路径：
+//
+//	mcfg.Load(config,
+//	    mcfg.WithAppName("myapp"),        // 设置应用名（仍可用于其他用途）
+//	    mcfg.WithConfigPaths("custom.yaml"), // 覆盖默认路径
 //	)
 //
 // # 环境变量(前缀)

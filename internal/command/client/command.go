@@ -15,6 +15,7 @@ import (
 
 	"github.com/lwmacct/251207-go-pkg-mcfg/internal/command"
 	"github.com/lwmacct/251207-go-pkg-mcfg/internal/config"
+	"github.com/lwmacct/251207-go-pkg-mcfg/pkg/mcfg"
 )
 
 // Command 客户端命令
@@ -63,15 +64,7 @@ func action(ctx context.Context, cmd *cli.Command) error {
 
 func healthAction(ctx context.Context, cmd *cli.Command) error {
 
-	// cfg, err := mcfg.Load(
-	// 	config.DefaultConfig(),
-	// 	mcfg.WithCommand(cmd),
-	// 	mcfg.WithConfigPaths(
-	// 		mcfg.DefaultPaths(version.GetAppRawName())...,
-	// 	),
-	// )
-
-	cfg, err := config.Load(cmd, version.GetAppRawName())
+	cfg, err := mcfg.LoadCmd(cmd, config.DefaultConfig(), version.GetAppRawName())
 	if err != nil {
 		return err
 	}
@@ -89,7 +82,7 @@ func healthAction(ctx context.Context, cmd *cli.Command) error {
 
 func getAction(ctx context.Context, cmd *cli.Command) error {
 
-	cfg, err := config.Load(cmd, version.GetAppRawName())
+	cfg, err := mcfg.LoadCmd(cmd, config.DefaultConfig(), version.GetAppRawName())
 	if err != nil {
 		return err
 	}

@@ -9,9 +9,6 @@ package config
 
 import (
 	"time"
-
-	"github.com/lwmacct/251207-go-pkg-mcfg/pkg/mcfg"
-	"github.com/urfave/cli/v3"
 )
 
 // Config 应用配置
@@ -51,12 +48,4 @@ func DefaultConfig() Config {
 			Retries: 3,
 		},
 	}
-}
-
-func Load(cmd *cli.Command, appName string, opts ...mcfg.Option) (*Config, error) {
-	return mcfg.LoadCmd(cmd, DefaultConfig(), appName,
-		append([]mcfg.Option{
-			mcfg.WithEnvPrefix("APP_"),
-		}, opts...)...,
-	)
 }
