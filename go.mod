@@ -1,4 +1,4 @@
-module github.com/lwmacct/251207-go-pkg-config
+module github.com/lwmacct/251207-go-pkg-mcfg
 
 go 1.25.0
 

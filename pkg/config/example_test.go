@@ -6,7 +6,7 @@ import (
 	"os"
 	"time"
 
-	"github.com/lwmacct/251207-go-pkg-config/pkg/config"
+	"github.com/lwmacct/251207-go-pkg-mcfg/pkg/config"
 )
 
 // Example_defaultPaths 演示如何获取默认配置文件搜索路径

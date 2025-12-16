@@ -10,7 +10,7 @@ package config
 import (
 	"time"
 
-	"github.com/lwmacct/251207-go-pkg-config/pkg/config"
+	"github.com/lwmacct/251207-go-pkg-mcfg/pkg/config"
 	"github.com/urfave/cli/v3"
 )
 

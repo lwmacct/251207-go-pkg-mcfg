@@ -44,7 +44,7 @@
 ## 安装
 
 ```bash
-go get github.com/lwmacct/251207-go-pkg-config/pkg/config
+go get github.com/lwmacct/251207-go-pkg-mcfg/pkg/config
 ```
 
 ## 快速开始
@@ -57,7 +57,7 @@ package config
 
 import (
     "time"
-    "github.com/lwmacct/251207-go-pkg-config/pkg/config"
+    "github.com/lwmacct/251207-go-pkg-mcfg/pkg/config"
 )
 
 type Config struct {
@@ -183,7 +183,7 @@ package config
 
 import (
     "testing"
-    "github.com/lwmacct/251207-go-pkg-config/pkg/config"
+    "github.com/lwmacct/251207-go-pkg-mcfg/pkg/config"
 )
 
 // 定义一次，复用多处
@@ -240,7 +240,7 @@ go test -v -run TestConfigKeysValid ./internal/config/...
 本库提供 `tmpl` 包用于模板展开，支持环境变量引用和多级 fallback 机制。
 
 ```bash
-go get github.com/lwmacct/251207-go-pkg-config/pkg/tmpl
+go get github.com/lwmacct/251207-go-pkg-mcfg/pkg/tmpl
 ```
 
 ### 基本语法
@@ -277,7 +277,7 @@ pipeline 友好的默认值函数：
 ### 使用示例
 
 ```go
-import "github.com/lwmacct/251207-go-pkg-config/pkg/tmpl"
+import "github.com/lwmacct/251207-go-pkg-mcfg/pkg/tmpl"
 
 // 展开模板
 result, err := tmpl.ExpandTemplate(`{

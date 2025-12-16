@@ -16,19 +16,19 @@ import (
 	"github.com/knadh/koanf/v2"
 	"github.com/urfave/cli/v3"
 
-	"github.com/lwmacct/251207-go-pkg-config/pkg/tmpl"
+	"github.com/lwmacct/251207-go-pkg-mcfg/pkg/tmpl"
 )
 
 // loadOptions 配置加载选项。
 type loadOptions struct {
-	cmd                  *cli.Command
-	configPaths          []string
-	baseDir              string // 路径基准目录，用于将相对路径转换为绝对路径
-	baseDirSet           bool   // 是否显式设置了 baseDir（区分空字符串和未设置）
-	envPrefix            string
-	envBindings          map[string]string
-	envBindKey           string
-	noTemplateExpansion  bool // 是否禁用配置文件模板展开（默认启用）
+	cmd                 *cli.Command
+	configPaths         []string
+	baseDir             string // 路径基准目录，用于将相对路径转换为绝对路径
+	baseDirSet          bool   // 是否显式设置了 baseDir（区分空字符串和未设置）
+	envPrefix           string
+	envBindings         map[string]string
+	envBindKey          string
+	noTemplateExpansion bool // 是否禁用配置文件模板展开（默认启用）
 }
 
 // Option 配置加载选项函数。

@@ -3,7 +3,7 @@ package config
 import (
 	"testing"
 
-	"github.com/lwmacct/251207-go-pkg-config/pkg/config"
+	"github.com/lwmacct/251207-go-pkg-mcfg/pkg/config"
 )
 
 var helper = config.ConfigTestHelper[Config]{

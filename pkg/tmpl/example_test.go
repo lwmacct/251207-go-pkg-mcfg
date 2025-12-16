@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/lwmacct/251207-go-pkg-config/pkg/tmpl"
+	"github.com/lwmacct/251207-go-pkg-mcfg/pkg/tmpl"
 )
 
 // Example_envFunction demonstrates using the env template function
