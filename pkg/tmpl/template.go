@@ -1,19 +1,3 @@
-// Package tmpl provides Agent configuration template expansion.
-//
-// Template system aligns with Taskfile design, supporting flexible environment variable access.
-//
-// # Design References
-//
-//   - Taskfile template syntax: https://taskfile.dev/docs/reference/templating
-//   - Taskfile environment variables: https://taskfile.dev/docs/reference/environment
-//   - Sprig template functions: https://github.com/Masterminds/sprig
-//
-// # Core Design Principles
-//
-//  1. Environment variables are automatically available via {{.VAR}} (Taskfile style)
-//  2. env function is optional, use when variable name conflicts occur
-//  3. Pipeline friendly: {{.VAR | default "fallback"}}
-//  4. Multi-level fallback: coalesce function supports graceful fallback chains
 package tmpl
 
 import (
@@ -108,7 +92,18 @@ func newTemplateData() map[string]string {
 // Template Rendering
 // ═══════════════════════════════════════════════════════════════════════════
 
-// ExpandTemplate expands template with environment variables
+// ExpandTemplate 展开模板字符串中的环境变量引用。
+//
+// 使用 Go text/template 引擎处理模板，所有环境变量自动加载到顶级命名空间。
+//
+// 支持的语法：
+//   - {{.VAR}} - 直接访问环境变量（Taskfile 风格）
+//   - {{env "VAR"}} - env 函数方式
+//   - {{env "VAR" "default"}} - 带默认值
+//   - {{.VAR | default "fallback"}} - 管道式默认值
+//   - {{coalesce .VAR1 .VAR2 "default"}} - 多级 fallback
+//
+// 返回展开后的字符串。如果模板语法错误或执行失败，返回 error。
 func ExpandTemplate(text string) (string, error) {
 	tmpl, err := template.New("config").Funcs(templateFuncs).Parse(text)
 	if err != nil {

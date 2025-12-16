@@ -1,4 +1,4 @@
-package config
+package mcfg
 
 import (
 	"fmt"

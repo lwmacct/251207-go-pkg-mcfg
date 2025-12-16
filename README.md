@@ -2,30 +2,18 @@
 
 <!--TOC-->
 
-- [特性](#特性) `:34+10`
-- [安装](#安装) `:44+6`
-- [快速开始](#快速开始) `:50+188`
-  - [1. 定义配置结构体](#1-定义配置结构体) `:52+34`
-  - [2. 加载配置](#2-加载配置) `:86+35`
-  - [3. 环境变量](#3-环境变量) `:121+54`
-  - [4. 测试驱动的配置管理](#4-测试驱动的配置管理) `:175+63`
-- [模板语法](#模板语法) `:238+52`
-  - [基本语法](#基本语法) `:246+10`
-  - [内置函数](#内置函数) `:256+21`
-  - [使用示例](#使用示例) `:277+13`
-- [API 参考](#api-参考) `:290+108`
-  - [config.Load](#configload) `:292+14`
-  - [config.WithConfigPaths](#configwithconfigpaths) `:306+8`
-  - [config.WithEnvPrefix](#configwithenvprefix) `:314+8`
-  - [config.WithEnvBinding / config.WithEnvBindings](#configwithenvbinding-configwithenvbindings) `:322+9`
-  - [config.WithEnvBindKey](#configwithenvbindkey) `:331+8`
-  - [config.WithCommand](#configwithcommand) `:339+8`
-  - [config.DefaultPaths](#configdefaultpaths) `:347+13`
-  - [config.GenerateExampleYAML](#configgenerateexampleyaml) `:360+8`
-  - [config.GenerateExampleJSON](#configgenerateexamplejson) `:368+8`
-  - [config.ConfigTestHelper](#configconfigtesthelper) `:376+14`
-  - [tmpl.ExpandTemplate](#tmplexpandtemplate) `:390+8`
-- [License](#license) `:398+3`
+- [特性](#特性) `:22+10`
+- [安装](#安装) `:32+6`
+- [快速开始](#快速开始) `:38+188`
+  - [1. 定义配置结构体](#1-定义配置结构体) `:40+34`
+  - [2. 加载配置](#2-加载配置) `:74+35`
+  - [3. 环境变量](#3-环境变量) `:109+54`
+  - [4. 测试驱动的配置管理](#4-测试驱动的配置管理) `:163+63`
+- [模板语法](#模板语法) `:226+52`
+  - [基本语法](#基本语法) `:234+10`
+  - [内置函数](#内置函数) `:244+21`
+  - [使用示例](#使用示例) `:265+13`
+- [License](#license) `:278+3`
 
 <!--TOC-->
 
@@ -44,7 +32,7 @@
 ## 安装
 
 ```bash
-go get github.com/lwmacct/251207-go-pkg-mcfg/pkg/config
+go get github.com/lwmacct/251207-go-pkg-mcfg/pkg/mcfg
 ```
 
 ## 快速开始
@@ -53,11 +41,11 @@ go get github.com/lwmacct/251207-go-pkg-mcfg/pkg/config
 
 ```go
 // internal/config/config.go
-package config
+package mcfg
 
 import (
     "time"
-    "github.com/lwmacct/251207-go-pkg-mcfg/pkg/config"
+    "github.com/lwmacct/251207-go-pkg-mcfg/pkg/mcfg"
 )
 
 type Config struct {
@@ -78,8 +66,8 @@ func DefaultConfig() Config {
     }
 }
 
-func Load(opts ...config.Option) (*Config, error) {
-    return config.Load(DefaultConfig(), opts...)
+func Load(opts ...mcfg.Option) (*Config, error) {
+    return mcfg.Load(DefaultConfig(), opts...)
 }
 ```
 
@@ -87,34 +75,34 @@ func Load(opts ...config.Option) (*Config, error) {
 
 ```go
 // 使用默认值 + 默认配置文件路径 (config.yaml, config/config.yaml)
-cfg, err := config.Load(DefaultConfig())
+cfg, err := mcfg.Load(DefaultConfig())
 
 // 使用应用专属配置文件路径 (.myapp.yaml, ~/.myapp.yaml, /etc/myapp/config.yaml 等)
-cfg, err := config.Load(DefaultConfig(),
-    config.WithConfigPaths(config.DefaultPaths("myapp")...),
+cfg, err := mcfg.Load(DefaultConfig(),
+    mcfg.WithConfigPaths(mcfg.DefaultPaths("myapp")...),
 )
 
 // 使用环境变量（前缀 MYAPP_）
-cfg, err := config.Load(DefaultConfig(),
-    config.WithEnvPrefix("MYAPP_"),
+cfg, err := mcfg.Load(DefaultConfig(),
+    mcfg.WithEnvPrefix("MYAPP_"),
 )
 
 // 绑定第三方工具环境变量（如 REDIS_URL）
-cfg, err := config.Load(DefaultConfig(),
-    config.WithEnvBindings(map[string]string{
+cfg, err := mcfg.Load(DefaultConfig(),
+    mcfg.WithEnvBindings(map[string]string{
         "REDIS_URL":         "redis.url",
         "ETCDCTL_ENDPOINTS": "etcd.endpoints",
     }),
 )
 
 // 完整示例：配置文件 + 环境变量 + CLI flags
-cfg, err := config.Load(DefaultConfig(),
-    config.WithConfigPaths("config.yaml", "/etc/myapp/config.yaml"),
-    config.WithEnvPrefix("MYAPP_"),
-    config.WithEnvBindings(map[string]string{
+cfg, err := mcfg.Load(DefaultConfig(),
+    mcfg.WithConfigPaths("config.yaml", "/etc/myapp/config.yaml"),
+    mcfg.WithEnvPrefix("MYAPP_"),
+    mcfg.WithEnvBindings(map[string]string{
         "REDIS_URL": "redis.url",
     }),
-    config.WithCommand(cmd),
+    mcfg.WithCommand(cmd),
 )
 ```
 
@@ -142,7 +130,7 @@ cfg, err := config.Load(DefaultConfig(),
 复用第三方工具的标准环境变量：
 
 ```go
-config.WithEnvBindings(map[string]string{
+mcfg.WithEnvBindings(map[string]string{
     "REDIS_URL":         "redis.url",
     "ETCDCTL_ENDPOINTS": "etcd.endpoints",
     "MYSQL_PWD":         "database.password",
@@ -164,9 +152,9 @@ redis:
 ```
 
 ```go
-cfg, err := config.Load(DefaultConfig(),
-    config.WithConfigPaths("config.yaml"),
-    config.WithEnvBindKey("envbind"),  // 从配置文件读取绑定
+cfg, err := mcfg.Load(DefaultConfig(),
+    mcfg.WithConfigPaths("config.yaml"),
+    mcfg.WithEnvBindKey("envbind"),  // 从配置文件读取绑定
 )
 ```
 
@@ -179,15 +167,15 @@ cfg, err := config.Load(DefaultConfig(),
 创建测试文件 `internal/config/config_test.go`：
 
 ```go
-package config
+package mcfg
 
 import (
     "testing"
-    "github.com/lwmacct/251207-go-pkg-mcfg/pkg/config"
+    "github.com/lwmacct/251207-go-pkg-mcfg/pkg/mcfg"
 )
 
 // 定义一次，复用多处
-var helper = config.ConfigTestHelper[Config]{
+var helper = mcfg.ConfigTestHelper[Config]{
     ExamplePath: "config/config.example.yaml",
     ConfigPath:  "config/config.yaml",
 }
@@ -286,114 +274,6 @@ result, err := tmpl.ExpandTemplate(`{
   "key": "{{coalesce .PRIMARY_KEY .BACKUP_KEY "sk-default"}}"
 }`)
 ```
-
-## API 参考
-
-### config.Load
-
-```go
-func Load[T any](defaultConfig T, opts ...Option) (*T, error)
-```
-
-加载配置，按优先级合并：
-
-1. `defaultConfig` - 默认值（最低优先级）
-2. `WithConfigPaths` - 配置文件（按顺序搜索，找到第一个即停止）
-3. `WithEnvPrefix` - 环境变量（前缀匹配）
-4. `WithEnvBindKey` / `WithEnvBindings` - 环境变量（绑定，代码优先于配置文件）
-5. `WithCommand` - CLI flags（最高优先级，仅当用户明确指定时覆盖）
-
-### config.WithConfigPaths
-
-```go
-func WithConfigPaths(paths ...string) Option
-```
-
-设置配置文件搜索路径。
-
-### config.WithEnvPrefix
-
-```go
-func WithEnvPrefix(prefix string) Option
-```
-
-设置环境变量前缀，启用环境变量配置源。
-
-### config.WithEnvBinding / config.WithEnvBindings
-
-```go
-func WithEnvBinding(envKey, configPath string) Option
-func WithEnvBindings(bindings map[string]string) Option
-```
-
-直接绑定环境变量到配置路径，用于复用第三方工具的标准环境变量。
-
-### config.WithEnvBindKey
-
-```go
-func WithEnvBindKey(key string) Option
-```
-
-设置配置文件中的环境变量绑定节点名称，无需修改代码即可配置映射。
-
-### config.WithCommand
-
-```go
-func WithCommand(cmd *cli.Command) Option
-```
-
-设置 CLI 命令，启用 CLI flags 配置源。
-
-### config.DefaultPaths
-
-```go
-func DefaultPaths(appName ...string) []string
-```
-
-返回默认配置文件搜索路径：
-
-- `config.yaml`
-- `config/config.yaml`
-- `~/.{appName}.yaml`（如果提供 appName）
-- `/etc/{appName}/config.yaml`（如果提供 appName）
-
-### config.GenerateExampleYAML
-
-```go
-func GenerateExampleYAML[T any](cfg T) []byte
-```
-
-根据配置结构体生成带注释的 YAML 示例，通过反射读取 `koanf` 和 `desc` tag。
-
-### config.GenerateExampleJSON
-
-```go
-func GenerateExampleJSON[T any](cfg T) []byte
-```
-
-根据配置结构体生成 JSON 示例。注意：JSON 不支持注释，`desc` tag 将被忽略。
-
-### config.ConfigTestHelper
-
-```go
-type ConfigTestHelper[T any] struct {
-    ExamplePath string // 示例文件相对路径
-    ConfigPath  string // 配置文件相对路径
-}
-
-func (h *ConfigTestHelper[T]) GenerateExample(t *testing.T, defaultConfig T)
-func (h *ConfigTestHelper[T]) ValidateKeys(t *testing.T)
-```
-
-测试辅助工具，用于在单元测试中生成配置示例和校验配置文件。路径相对于 `go.mod` 所在目录。
-
-### tmpl.ExpandTemplate
-
-```go
-func ExpandTemplate(text string) (string, error)
-```
-
-展开模板字符串中的环境变量引用。支持 `{{.VAR}}`、`env`、`default`、`coalesce` 语法。
 
 ## License
 

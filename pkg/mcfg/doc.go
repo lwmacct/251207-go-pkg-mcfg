@@ -1,4 +1,4 @@
-// Package config 提供通用的配置加载功能，可被外部项目复用。
+// Package mcfg 提供通用的配置加载功能，可被外部项目复用。
 //
 // # 特性
 //
@@ -23,15 +23,15 @@
 //
 // 加载配置（使用函数选项模式）：
 //
-//	cfg, err := config.Load(Config{
+//	cfg, err := mcfg.Load(Config{
 //	    Name:    "default",
 //	    Debug:   false,
 //	    Timeout: 30 * time.Second,
 //	},
-//	    config.WithConfigPaths(config.DefaultPaths("myapp")...),
-//	    config.WithEnvPrefix("MYAPP_"),
-//	    config.WithEnvBindKey("envbind"),
-//	    config.WithCommand(cmd),
+//	    mcfg.WithConfigPaths(mcfg.DefaultPaths("myapp")...),
+//	    mcfg.WithEnvPrefix("MYAPP_"),
+//	    mcfg.WithEnvBindKey("envbind"),
+//	    mcfg.WithCommand(cmd),
 //	)
 //
 // # 环境变量(前缀)
@@ -51,7 +51,7 @@
 //
 // 方式一：通过代码绑定 [WithEnvBindings]：
 //
-//	config.WithEnvBindings(map[string]string{
+//	mcfg.WithEnvBindings(map[string]string{
 //	    "REDIS_URL":         "redis.url",
 //	    "ETCDCTL_ENDPOINTS": "etcd.endpoints",
 //	})
@@ -92,9 +92,9 @@
 //
 // 禁用模板展开：
 //
-//	cfg, err := config.Load(Config{},
-//	    config.WithConfigPaths("config.yaml"),
-//	    config.WithoutTemplateExpansion(), // 禁用模板展开
+//	cfg, err := mcfg.Load(Config{},
+//	    mcfg.WithConfigPaths("config.yaml"),
+//	    mcfg.WithoutTemplateExpansion(), // 禁用模板展开
 //	)
 //
 // # CLI Flag 映射
@@ -117,23 +117,23 @@
 //
 // 使用 [GenerateExampleYAML] 根据配置结构体生成带注释的 YAML 示例文件：
 //
-//	yaml := config.GenerateExampleYAML(defaultConfig)
+//	yaml := mcfg.GenerateExampleYAML(defaultConfig)
 //	os.WriteFile("config.example.yaml", yaml, 0644)
 //
 // 使用 [GenerateExampleJSON] 生成 JSON 示例文件（JSON 不支持注释）：
 //
-//	jsonBytes := config.GenerateExampleJSON(defaultConfig)
+//	jsonBytes := mcfg.GenerateExampleJSON(defaultConfig)
 //	os.WriteFile("config.example.json", jsonBytes, 0644)
 //
 // # 测试辅助
 //
 // 使用 [ConfigTestHelper] 提供测试辅助功能：
 //
-//	var helper = config.ConfigTestHelper[Config]{
+//	var helper = mcfg.ConfigTestHelper[Config]{
 //	    ExamplePath: "config/config.example.yaml",
 //	    ConfigPath:  "config/config.yaml",
 //	}
 //
 //	func TestGenerateExample(t *testing.T) { helper.GenerateExample(t, DefaultConfig()) }
 //	func TestConfigKeysValid(t *testing.T) { helper.ValidateKeys(t) }
-package config
+package mcfg

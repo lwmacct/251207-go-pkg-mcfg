@@ -1,4 +1,4 @@
-package config
+package mcfg
 
 import (
 	"context"
@@ -1000,9 +1000,9 @@ func TestLoadWithJSONConfig(t *testing.T) {
 
 func TestParserForPath(t *testing.T) {
 	tests := []struct {
-		name     string
-		path     string
-		isJSON   bool
+		name   string
+		path   string
+		isJSON bool
 	}{
 		{"yaml extension", "config.yaml", false},
 		{"yml extension", "config.yml", false},
