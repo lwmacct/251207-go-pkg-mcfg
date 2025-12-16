@@ -8,12 +8,9 @@ import (
 	"path/filepath"
 	"reflect"
 	"runtime"
-	"strings"
 	"testing"
 	"time"
 
-	kjson "github.com/knadh/koanf/parsers/json"
-	kyaml "github.com/knadh/koanf/parsers/yaml"
 	"github.com/knadh/koanf/providers/file"
 	"github.com/knadh/koanf/v2"
 	"go.yaml.in/yaml/v3"
@@ -299,13 +296,7 @@ func FindProjectRoot(skip int) (string, error) {
 // loadConfigKeys 加载配置文件并返回所有配置键（支持 YAML 和 JSON）。
 func loadConfigKeys(path string) ([]string, error) {
 	k := koanf.New(".")
-	var parser koanf.Parser
-	if strings.ToLower(filepath.Ext(path)) == ".json" {
-		parser = kjson.Parser()
-	} else {
-		parser = kyaml.Parser()
-	}
-	if err := k.Load(file.Provider(path), parser); err != nil {
+	if err := k.Load(file.Provider(path), parserForPath(path)); err != nil {
 		return nil, fmt.Errorf("加载文件失败: %w", err)
 	}
 	return k.Keys(), nil

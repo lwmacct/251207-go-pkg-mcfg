@@ -342,23 +342,6 @@ func Load[T any](defaultConfig T, opts ...Option) (*T, error) {
 	return &cfg, nil
 }
 
-// envKeyDecoder 返回环境变量 key 解码器。
-//
-// 转换规则：
-//  1. 移除前缀
-//  2. 转为小写
-//  3. 下划线 (_) 转为点号 (.)
-//
-// 示例：MYAPP_SERVER_URL → server.url
-func envKeyDecoder(prefix string) func(string) string {
-	return func(key string) string {
-		key = strings.TrimPrefix(key, prefix)
-		key = strings.ToLower(key)
-		key = strings.ReplaceAll(key, "_", ".")
-		return key
-	}
-}
-
 // collectKoanfKeys 通过反射收集配置结构体的所有 koanf key。
 //
 // 递归遍历结构体字段，返回所有叶子节点的完整 koanf key。

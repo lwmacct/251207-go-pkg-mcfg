@@ -51,31 +51,6 @@ func runCLITest[T any](t *testing.T, defaultCfg T, flags []cli.Flag, args []stri
 }
 
 // =============================================================================
-// envKeyDecoder 测试
-// =============================================================================
-
-func TestEnvKeyDecoder(t *testing.T) {
-	tests := []struct {
-		name     string
-		prefix   string
-		input    string
-		expected string
-	}{
-		{"simple key", "MYAPP_", "MYAPP_DEBUG", "debug"},
-		{"nested key", "MYAPP_", "MYAPP_SERVER_URL", "server.url"},
-		{"deeply nested key", "MYAPP_", "MYAPP_CLIENT_SERVER_PASSWORD", "client.server.password"},
-		{"empty prefix", "", "SERVER_URL", "server.url"},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			result := envKeyDecoder(tt.prefix)(tt.input)
-			assert.Equal(t, tt.expected, result)
-		})
-	}
-}
-
-// =============================================================================
 // Load 函数测试
 // =============================================================================
 
