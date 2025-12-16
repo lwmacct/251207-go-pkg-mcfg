@@ -314,3 +314,36 @@ func Example_load_withJSONConfig() {
 	// Name: json-app
 	// Debug: true
 }
+
+// Example_withAppName 演示如何使用 WithAppName 设置应用名称
+//
+// WithAppName 会自动配置默认的配置文件搜索路径（如果未通过 WithConfigPaths 显式设置）。
+func Example_withAppName() {
+	type Config struct {
+		Name  string `koanf:"name"`
+		Debug bool   `koanf:"debug"`
+	}
+
+	defaultCfg := Config{
+		Name:  "default-app",
+		Debug: false,
+	}
+
+	// 使用 WithAppName 设置应用名称
+	// 会自动搜索 .myapp.yaml, ~/.myapp.yaml, /etc/myapp/config.yaml 等路径
+	cfg, err := mcfg.Load(defaultCfg,
+		mcfg.WithAppName("myapp"),
+	)
+	if err != nil {
+		fmt.Println("加载失败:", err)
+		return
+	}
+
+	// 配置文件不存在时，使用默认值
+	fmt.Println("Name:", cfg.Name)
+	fmt.Println("Debug:", cfg.Debug)
+
+	// Output:
+	// Name: default-app
+	// Debug: false
+}

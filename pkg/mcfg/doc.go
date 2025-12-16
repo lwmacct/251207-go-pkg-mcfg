@@ -21,16 +21,21 @@
 //	    Timeout time.Duration `koanf:"timeout" desc:"超时时间"`
 //	}
 //
-// 加载配置（使用函数选项模式）：
+// 加载配置（推荐使用 LoadCmd）：
+//
+//	cfg, err := mcfg.LoadCmd(cmd, DefaultConfig(), "myapp",
+//	    mcfg.WithEnvPrefix("MYAPP_"),
+//	)
+//
+// 或者使用完整的 Load 函数（更灵活）：
 //
 //	cfg, err := mcfg.Load(Config{
 //	    Name:    "default",
 //	    Debug:   false,
 //	    Timeout: 30 * time.Second,
 //	},
-//	    mcfg.WithConfigPaths(mcfg.DefaultPaths("myapp")...),
+//	    mcfg.WithAppName("myapp"),
 //	    mcfg.WithEnvPrefix("MYAPP_"),
-//	    mcfg.WithEnvBindKey("envbind"),
 //	    mcfg.WithCommand(cmd),
 //	)
 //

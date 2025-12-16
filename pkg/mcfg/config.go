@@ -21,6 +21,7 @@ import (
 
 // loadOptions 配置加载选项。
 type loadOptions struct {
+	appName             string // 应用名称，用于生成默认配置路径
 	cmd                 *cli.Command
 	configPaths         []string
 	baseDir             string // 路径基准目录，用于将相对路径转换为绝对路径
@@ -40,6 +41,23 @@ type Option func(*loadOptions)
 func WithCommand(cmd *cli.Command) Option {
 	return func(o *loadOptions) {
 		o.cmd = cmd
+	}
+}
+
+// WithAppName 设置应用名称。
+//
+// 设置后会自动配置默认的配置文件搜索路径（如果未通过 [WithConfigPaths] 显式设置）。
+// 搜索路径规则见 [DefaultPaths]。
+//
+// 示例：
+//
+//	mcfg.Load(defaultConfig,
+//	    mcfg.WithAppName("myapp"),  // 自动搜索 .myapp.yaml 等
+//	    mcfg.WithCommand(cmd),
+//	)
+func WithAppName(name string) Option {
+	return func(o *loadOptions) {
+		o.appName = name
 	}
 }
 
@@ -218,8 +236,13 @@ func Load[T any](defaultConfig T, opts ...Option) (*T, error) {
 	}
 
 	// 默认使用 DefaultPaths 作为配置文件搜索路径
+	// 如果设置了 appName，使用 DefaultPaths(appName) 生成应用专属路径
 	if len(options.configPaths) == 0 {
-		options.configPaths = DefaultPaths()
+		if options.appName != "" {
+			options.configPaths = DefaultPaths(options.appName)
+		} else {
+			options.configPaths = DefaultPaths()
+		}
 	}
 
 	k := koanf.New(".")
@@ -340,6 +363,37 @@ func Load[T any](defaultConfig T, opts ...Option) (*T, error) {
 	}
 
 	return &cfg, nil
+}
+
+// LoadCmd 是 [Load] 的便捷版本，将 CLI 命令和应用名称作为参数。
+//
+// 这是最常用的配置加载方式，适合大多数 CLI 应用场景。
+// appName 用于生成默认配置文件搜索路径（见 [DefaultPaths]）。
+// 如果 appName 为空字符串，将只搜索通用配置路径。
+//
+// 等价于：
+//
+//	mcfg.Load(defaultConfig,
+//	    mcfg.WithCommand(cmd),
+//	    mcfg.WithAppName(appName),  // 如果 appName 非空
+//	    opts...,
+//	)
+//
+// 示例：
+//
+//	// 带应用名（推荐）
+//	cfg, err := mcfg.LoadCmd(cmd, DefaultConfig(), "myapp",
+//	    mcfg.WithEnvPrefix("MYAPP_"),
+//	)
+//
+//	// 不带应用名
+//	cfg, err := mcfg.LoadCmd(cmd, DefaultConfig(), "")
+func LoadCmd[T any](cmd *cli.Command, defaultConfig T, appName string, opts ...Option) (*T, error) {
+	baseOpts := []Option{WithCommand(cmd)}
+	if appName != "" {
+		baseOpts = append(baseOpts, WithAppName(appName))
+	}
+	return Load(defaultConfig, append(baseOpts, opts...)...)
 }
 
 // collectKoanfKeys 通过反射收集配置结构体的所有 koanf key。

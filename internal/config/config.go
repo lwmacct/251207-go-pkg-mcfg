@@ -54,11 +54,8 @@ func DefaultConfig() Config {
 }
 
 func Load(cmd *cli.Command, appName string, opts ...mcfg.Option) (*Config, error) {
-	return mcfg.Load(
-		DefaultConfig(),
+	return mcfg.LoadCmd(cmd, DefaultConfig(), appName,
 		append([]mcfg.Option{
-			mcfg.WithCommand(cmd),
-			mcfg.WithConfigPaths(mcfg.DefaultPaths(appName)...),
 			mcfg.WithEnvPrefix("APP_"),
 		}, opts...)...,
 	)
