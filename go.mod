@@ -13,7 +13,7 @@ require (
 	github.com/lwmacct/251207-go-pkg-version v0.0.2
 	github.com/stretchr/testify v1.11.1
 	github.com/urfave/cli/v3 v3.6.1
-	go.yaml.in/yaml/v3 v3.0.3
+	go.yaml.in/yaml/v3 v3.0.4
 )
 
 require (
