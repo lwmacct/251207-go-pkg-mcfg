@@ -3,6 +3,7 @@ package mcfg
 import (
 	"fmt"
 	"log/slog"
+	"maps"
 	"os"
 	"path/filepath"
 	"reflect"
@@ -19,8 +20,8 @@ import (
 	"github.com/lwmacct/251207-go-pkg-mcfg/pkg/tmpl"
 )
 
-// loadOptions 配置加载选项。
-type loadOptions struct {
+// options 配置加载选项。
+type options struct {
 	appName             string // 应用名称，用于生成默认配置路径
 	cmd                 *cli.Command
 	configPaths         []string
@@ -33,13 +34,13 @@ type loadOptions struct {
 }
 
 // Option 配置加载选项函数。
-type Option func(*loadOptions)
+type Option func(*options)
 
 // WithCommand 设置 CLI 命令，用于从 CLI flags 加载配置。
 //
 // CLI flags 具有最高优先级，仅当用户明确指定时才覆盖其他配置源。
 func WithCommand(cmd *cli.Command) Option {
-	return func(o *loadOptions) {
+	return func(o *options) {
 		o.cmd = cmd
 	}
 }
@@ -56,7 +57,7 @@ func WithCommand(cmd *cli.Command) Option {
 //	    mcfg.WithCommand(cmd),
 //	)
 func WithAppName(name string) Option {
-	return func(o *loadOptions) {
+	return func(o *options) {
 		o.appName = name
 	}
 }
@@ -65,7 +66,7 @@ func WithAppName(name string) Option {
 //
 // 按顺序搜索，找到第一个即停止。可使用 [DefaultPaths] 获取默认路径。
 func WithConfigPaths(paths ...string) Option {
-	return func(o *loadOptions) {
+	return func(o *options) {
 		o.configPaths = paths
 	}
 }
@@ -79,7 +80,7 @@ func WithConfigPaths(paths ...string) Option {
 //
 // 注意：绝对路径不受影响。
 func WithBaseDir(path string) Option {
-	return func(o *loadOptions) {
+	return func(o *options) {
 		o.baseDir = path
 		o.baseDirSet = true
 	}
@@ -101,7 +102,7 @@ func WithBaseDir(path string) Option {
 // 注意：通过反射自动生成所有 koanf key 的绑定，因此支持任意命名的 koanf key。
 // 若同一配置路径被 [WithEnvBindings] 或 [WithEnvBindKey] 显式绑定，则显式绑定优先。
 func WithEnvPrefix(prefix string) Option {
-	return func(o *loadOptions) {
+	return func(o *options) {
 		o.envPrefix = prefix
 	}
 }
@@ -115,7 +116,7 @@ func WithEnvPrefix(prefix string) Option {
 //	config.WithEnvBinding("REDIS_URL", "redis.url")
 //	config.WithEnvBinding("ETCDCTL_ENDPOINTS", "etcd.endpoints")
 func WithEnvBinding(envKey, configPath string) Option {
-	return func(o *loadOptions) {
+	return func(o *options) {
 		if o.envBindings == nil {
 			o.envBindings = make(map[string]string)
 		}
@@ -135,13 +136,11 @@ func WithEnvBinding(envKey, configPath string) Option {
 //	    "MYSQL_PWD":         "database.password",
 //	})
 func WithEnvBindings(bindings map[string]string) Option {
-	return func(o *loadOptions) {
+	return func(o *options) {
 		if o.envBindings == nil {
 			o.envBindings = make(map[string]string)
 		}
-		for k, v := range bindings {
-			o.envBindings[k] = v
-		}
+		maps.Copy(o.envBindings, bindings)
 	}
 }
 
@@ -159,7 +158,7 @@ func WithEnvBindings(bindings map[string]string) Option {
 //	redis:
 //	  url: "redis://localhost:6379"
 func WithEnvBindKey(key string) Option {
-	return func(o *loadOptions) {
+	return func(o *options) {
 		o.envBindKey = key
 	}
 }
@@ -174,7 +173,7 @@ func WithEnvBindKey(key string) Option {
 //
 // 使用此选项可禁用模板展开，配置文件中的 {{...}} 将作为字面量保留。
 func WithoutTemplateExpansion() Option {
-	return func(o *loadOptions) {
+	return func(o *options) {
 		o.noTemplateExpansion = true
 	}
 }
@@ -223,7 +222,7 @@ func DefaultPaths(appName ...string) []string {
 // 泛型参数 T 为配置结构体类型，必须使用 koanf tag 标记字段。
 func Load[T any](defaultConfig T, opts ...Option) (*T, error) {
 	// 解析选项
-	options := &loadOptions{}
+	options := &options{}
 	for _, opt := range opts {
 		opt(options)
 	}
@@ -396,6 +395,43 @@ func LoadCmd[T any](cmd *cli.Command, defaultConfig T, appName string, opts ...O
 	return Load(defaultConfig, append(baseOpts, opts...)...)
 }
 
+// MustLoad 是 [Load] 的 panic 版本。
+//
+// 如果配置加载失败，会调用 panic 终止程序。
+// 适用于程序启动阶段，配置加载失败意味着程序无法继续。
+//
+// 示例：
+//
+//	cfg := mcfg.MustLoad(DefaultConfig(),
+//	    mcfg.WithAppName("myapp"),
+//	    mcfg.WithEnvPrefix("MYAPP_"),
+//	)
+func MustLoad[T any](defaultConfig T, opts ...Option) *T {
+	cfg, err := Load(defaultConfig, opts...)
+	if err != nil {
+		panic(fmt.Sprintf("mcfg: failed to load config: %v", err))
+	}
+	return cfg
+}
+
+// MustLoadCmd 是 [LoadCmd] 的 panic 版本。
+//
+// 如果配置加载失败，会调用 panic 终止程序。
+// 适用于程序启动阶段，配置加载失败意味着程序无法继续。
+//
+// 示例：
+//
+//	cfg := mcfg.MustLoadCmd(cmd, DefaultConfig(), "myapp",
+//	    mcfg.WithEnvPrefix("MYAPP_"),
+//	)
+func MustLoadCmd[T any](cmd *cli.Command, defaultConfig T, appName string, opts ...Option) *T {
+	cfg, err := LoadCmd(cmd, defaultConfig, appName, opts...)
+	if err != nil {
+		panic(fmt.Sprintf("mcfg: failed to load config: %v", err))
+	}
+	return cfg
+}
+
 // collectKoanfKeys 通过反射收集配置结构体的所有 koanf key。
 //
 // 递归遍历结构体字段，返回所有叶子节点的完整 koanf key。
@@ -409,7 +445,7 @@ func collectKoanfKeys[T any](defaultConfig T) []string {
 // collectKoanfKeysRecursive 递归收集 koanf key。
 func collectKoanfKeysRecursive(typ reflect.Type, prefix string, keys *[]string) {
 	// 处理指针类型
-	if typ.Kind() == reflect.Ptr {
+	if typ.Kind() == reflect.Pointer {
 		typ = typ.Elem()
 	}
 
