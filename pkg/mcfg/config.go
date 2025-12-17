@@ -221,6 +221,16 @@ func DefaultPaths(appName ...string) []string {
 //
 // 泛型参数 T 为配置结构体类型，必须使用 koanf tag 标记字段。
 func Load[T any](defaultConfig T, opts ...Option) (*T, error) {
+	return load(defaultConfig, 1, opts...)
+}
+
+// load 是内部加载函数，callerSkip 指定 FindProjectRoot 的调用栈跳过层数。
+// 不同的入口函数根据自身调用深度传递正确的 skip 值：
+//   - Load: skip=1 (Load → load → FindProjectRoot)
+//   - LoadCmd: skip=1 (LoadCmd → load → FindProjectRoot)
+//   - MustLoad: skip=2 (MustLoad → load → FindProjectRoot)
+//   - MustLoadCmd: skip=2 (MustLoadCmd → load → FindProjectRoot)
+func load[T any](defaultConfig T, callerSkip int, opts ...Option) (*T, error) {
 	// 解析选项
 	options := &options{}
 	for _, opt := range opts {
@@ -229,7 +239,7 @@ func Load[T any](defaultConfig T, opts ...Option) (*T, error) {
 
 	// 默认使用项目根目录作为相对路径基准
 	if !options.baseDirSet {
-		if root, err := FindProjectRoot(1); err == nil {
+		if root, err := FindProjectRoot(callerSkip); err == nil {
 			options.baseDir = root
 		}
 	}
@@ -392,7 +402,7 @@ func LoadCmd[T any](cmd *cli.Command, defaultConfig T, appName string, opts ...O
 	if appName != "" {
 		baseOpts = append(baseOpts, WithAppName(appName))
 	}
-	return Load(defaultConfig, append(baseOpts, opts...)...)
+	return load(defaultConfig, 1, append(baseOpts, opts...)...)
 }
 
 // MustLoad 是 [Load] 的 panic 版本。
@@ -407,7 +417,7 @@ func LoadCmd[T any](cmd *cli.Command, defaultConfig T, appName string, opts ...O
 //	    mcfg.WithEnvPrefix("MYAPP_"),
 //	)
 func MustLoad[T any](defaultConfig T, opts ...Option) *T {
-	cfg, err := Load(defaultConfig, opts...)
+	cfg, err := load(defaultConfig, 2, opts...)
 	if err != nil {
 		panic(fmt.Sprintf("mcfg: failed to load config: %v", err))
 	}
@@ -425,7 +435,11 @@ func MustLoad[T any](defaultConfig T, opts ...Option) *T {
 //	    mcfg.WithEnvPrefix("MYAPP_"),
 //	)
 func MustLoadCmd[T any](cmd *cli.Command, defaultConfig T, appName string, opts ...Option) *T {
-	cfg, err := LoadCmd(cmd, defaultConfig, appName, opts...)
+	baseOpts := []Option{WithCommand(cmd)}
+	if appName != "" {
+		baseOpts = append(baseOpts, WithAppName(appName))
+	}
+	cfg, err := load(defaultConfig, 2, append(baseOpts, opts...)...)
 	if err != nil {
 		panic(fmt.Sprintf("mcfg: failed to load config: %v", err))
 	}
