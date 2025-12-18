@@ -1,4 +1,4 @@
-package mcfg
+package cfgm
 
 import (
 	"bytes"
@@ -25,7 +25,7 @@ import (
 //
 // 使用示例：
 //
-//	yaml := mcfg.ExampleYAML(DefaultConfig())
+//	yaml := cfgm.ExampleYAML(DefaultConfig())
 //	os.WriteFile("config/config.example.yaml", yaml, 0644)
 func ExampleYAML[T any](cfg T) []byte {
 	node := structToNode(reflect.ValueOf(cfg), reflect.TypeOf(cfg))
@@ -45,7 +45,7 @@ func ExampleYAML[T any](cfg T) []byte {
 //
 // 使用示例：
 //
-//	yaml := mcfg.MarshalYAML(cfg)
+//	yaml := cfgm.MarshalYAML(cfg)
 //	os.WriteFile("config/config.yaml", yaml, 0644)
 func MarshalYAML[T any](cfg T) []byte {
 	k := koanf.New(".")
@@ -58,7 +58,7 @@ func MarshalYAML[T any](cfg T) []byte {
 //
 // 使用示例：
 //
-//	jsonBytes := mcfg.MarshalJSON(cfg)
+//	jsonBytes := cfgm.MarshalJSON(cfg)
 //	os.WriteFile("config/config.json", jsonBytes, 0644)
 func MarshalJSON[T any](cfg T) []byte {
 	var buf bytes.Buffer
@@ -217,7 +217,7 @@ func valueToNode(val reflect.Value, typ reflect.Type) *yamlv3.Node {
 //
 // 使用示例：
 //
-//	var helper = mcfg.ConfigTestHelper[Config]{
+//	var helper = cfgm.ConfigTestHelper[Config]{
 //	    ExamplePath: "config/config.example.yaml",
 //	    ConfigPath:  "config/config.yaml",
 //	}

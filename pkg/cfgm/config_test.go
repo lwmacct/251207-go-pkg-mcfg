@@ -1,4 +1,4 @@
-package mcfg
+package cfgm
 
 import (
 	"context"

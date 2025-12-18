@@ -32,7 +32,7 @@
 ## 安装
 
 ```bash
-go get github.com/lwmacct/251207-go-pkg-mcfg/pkg/mcfg
+go get github.com/lwmacct/251207-go-pkg-cfgm/pkg/cfgm
 ```
 
 ## 快速开始
@@ -41,11 +41,11 @@ go get github.com/lwmacct/251207-go-pkg-mcfg/pkg/mcfg
 
 ```go
 // internal/config/config.go
-package mcfg
+package cfgm
 
 import (
     "time"
-    "github.com/lwmacct/251207-go-pkg-mcfg/pkg/mcfg"
+    "github.com/lwmacct/251207-go-pkg-cfgm/pkg/cfgm"
 )
 
 type Config struct {
@@ -66,8 +66,8 @@ func DefaultConfig() Config {
     }
 }
 
-func Load(opts ...mcfg.Option) (*Config, error) {
-    return mcfg.Load(DefaultConfig(), opts...)
+func Load(opts ...cfgm.Option) (*Config, error) {
+    return cfgm.Load(DefaultConfig(), opts...)
 }
 ```
 
@@ -75,34 +75,34 @@ func Load(opts ...mcfg.Option) (*Config, error) {
 
 ```go
 // 使用默认值 + 默认配置文件路径 (config.yaml, config/config.yaml)
-cfg, err := mcfg.Load(DefaultConfig())
+cfg, err := cfgm.Load(DefaultConfig())
 
 // 使用应用专属配置文件路径 (.myapp.yaml, ~/.myapp.yaml, /etc/myapp/config.yaml 等)
-cfg, err := mcfg.Load(DefaultConfig(),
-    mcfg.WithConfigPaths(mcfg.DefaultPaths("myapp")...),
+cfg, err := cfgm.Load(DefaultConfig(),
+    cfgm.WithConfigPaths(cfgm.DefaultPaths("myapp")...),
 )
 
 // 使用环境变量（前缀 MYAPP_）
-cfg, err := mcfg.Load(DefaultConfig(),
-    mcfg.WithEnvPrefix("MYAPP_"),
+cfg, err := cfgm.Load(DefaultConfig(),
+    cfgm.WithEnvPrefix("MYAPP_"),
 )
 
 // 绑定第三方工具环境变量（如 REDIS_URL）
-cfg, err := mcfg.Load(DefaultConfig(),
-    mcfg.WithEnvBindings(map[string]string{
+cfg, err := cfgm.Load(DefaultConfig(),
+    cfgm.WithEnvBindings(map[string]string{
         "REDIS_URL":         "redis.url",
         "ETCDCTL_ENDPOINTS": "etcd.endpoints",
     }),
 )
 
 // 完整示例：配置文件 + 环境变量 + CLI flags
-cfg, err := mcfg.Load(DefaultConfig(),
-    mcfg.WithConfigPaths("config.yaml", "/etc/myapp/config.yaml"),
-    mcfg.WithEnvPrefix("MYAPP_"),
-    mcfg.WithEnvBindings(map[string]string{
+cfg, err := cfgm.Load(DefaultConfig(),
+    cfgm.WithConfigPaths("config.yaml", "/etc/myapp/config.yaml"),
+    cfgm.WithEnvPrefix("MYAPP_"),
+    cfgm.WithEnvBindings(map[string]string{
         "REDIS_URL": "redis.url",
     }),
-    mcfg.WithCommand(cmd),
+    cfgm.WithCommand(cmd),
 )
 ```
 
@@ -130,7 +130,7 @@ cfg, err := mcfg.Load(DefaultConfig(),
 复用第三方工具的标准环境变量：
 
 ```go
-mcfg.WithEnvBindings(map[string]string{
+cfgm.WithEnvBindings(map[string]string{
     "REDIS_URL":         "redis.url",
     "ETCDCTL_ENDPOINTS": "etcd.endpoints",
     "MYSQL_PWD":         "database.password",
@@ -152,9 +152,9 @@ redis:
 ```
 
 ```go
-cfg, err := mcfg.Load(DefaultConfig(),
-    mcfg.WithConfigPaths("config.yaml"),
-    mcfg.WithEnvBindKey("envbind"),  // 从配置文件读取绑定
+cfg, err := cfgm.Load(DefaultConfig(),
+    cfgm.WithConfigPaths("config.yaml"),
+    cfgm.WithEnvBindKey("envbind"),  // 从配置文件读取绑定
 )
 ```
 
@@ -167,15 +167,15 @@ cfg, err := mcfg.Load(DefaultConfig(),
 创建测试文件 `internal/config/config_test.go`：
 
 ```go
-package mcfg
+package cfgm
 
 import (
     "testing"
-    "github.com/lwmacct/251207-go-pkg-mcfg/pkg/mcfg"
+    "github.com/lwmacct/251207-go-pkg-cfgm/pkg/cfgm"
 )
 
 // 定义一次，复用多处
-var helper = mcfg.ConfigTestHelper[Config]{
+var helper = cfgm.ConfigTestHelper[Config]{
     ExamplePath: "config/config.example.yaml",
     ConfigPath:  "config/config.yaml",
 }
@@ -228,7 +228,7 @@ go test -v -run TestConfigKeysValid ./internal/config/...
 本库提供 `tmpl` 包用于模板展开，支持环境变量引用和多级 fallback 机制。
 
 ```bash
-go get github.com/lwmacct/251207-go-pkg-mcfg/pkg/tmpl
+go get github.com/lwmacct/251207-go-pkg-cfgm/pkg/tmpl
 ```
 
 ### 基本语法
@@ -265,7 +265,7 @@ pipeline 友好的默认值函数：
 ### 使用示例
 
 ```go
-import "github.com/lwmacct/251207-go-pkg-mcfg/pkg/tmpl"
+import "github.com/lwmacct/251207-go-pkg-cfgm/pkg/tmpl"
 
 // 展开模板
 result, err := tmpl.ExpandTemplate(`{

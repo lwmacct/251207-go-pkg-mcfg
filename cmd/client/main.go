@@ -6,7 +6,7 @@ import (
 	"os"
 
 	"github.com/lwmacct/251125-go-pkg-logger/pkg/logger"
-	app "github.com/lwmacct/251207-go-pkg-mcfg/internal/command/client"
+	app "github.com/lwmacct/251207-go-pkg-cfgm/internal/command/client"
 )
 
 func main() {

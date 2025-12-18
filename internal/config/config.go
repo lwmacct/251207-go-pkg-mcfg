@@ -10,7 +10,7 @@ package config
 import (
 	"time"
 
-	"github.com/lwmacct/251207-go-pkg-mcfg/pkg/mcfg"
+	"github.com/lwmacct/251207-go-pkg-cfgm/pkg/cfgm"
 	"github.com/lwmacct/251207-go-pkg-version/pkg/version"
 	"github.com/urfave/cli/v3"
 )
@@ -58,7 +58,7 @@ func DefaultConfig() Config {
 //
 // cfg := config.LoadCmd(cmd)
 func LoadCmd(cmd *cli.Command) *Config {
-	cfg, err := mcfg.LoadCmd(cmd, DefaultConfig(), version.GetAppRawName())
+	cfg, err := cfgm.LoadCmd(cmd, DefaultConfig(), version.GetAppRawName())
 	if err != nil {
 		panic(err)
 	}

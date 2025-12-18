@@ -14,8 +14,8 @@ import (
 	"github.com/lwmacct/251207-go-pkg-version/pkg/version"
 	"github.com/urfave/cli/v3"
 
-	"github.com/lwmacct/251207-go-pkg-mcfg/internal/command"
-	"github.com/lwmacct/251207-go-pkg-mcfg/internal/config"
+	"github.com/lwmacct/251207-go-pkg-cfgm/internal/command"
+	"github.com/lwmacct/251207-go-pkg-cfgm/internal/config"
 )
 
 // Command 服务器命令

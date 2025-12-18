@@ -1,4 +1,4 @@
-// Package mcfg 提供通用的配置加载功能，可被外部项目复用。
+// Package cfgm 提供通用的配置加载功能，可被外部项目复用。
 //
 // # 特性
 //
@@ -26,20 +26,20 @@
 //
 // 加载配置（推荐使用 LoadCmd）：
 //
-//	cfg, err := mcfg.LoadCmd(cmd, DefaultConfig(), "myapp",
-//	    mcfg.WithEnvPrefix("MYAPP_"),
+//	cfg, err := cfgm.LoadCmd(cmd, DefaultConfig(), "myapp",
+//	    cfgm.WithEnvPrefix("MYAPP_"),
 //	)
 //
 // 或者使用完整的 Load 函数（更灵活）：
 //
-//	cfg, err := mcfg.Load(Config{
+//	cfg, err := cfgm.Load(Config{
 //	    Name:    "default",
 //	    Debug:   false,
 //	    Timeout: 30 * time.Second,
 //	},
-//	    mcfg.WithAppName("myapp"),
-//	    mcfg.WithEnvPrefix("MYAPP_"),
-//	    mcfg.WithCommand(cmd),
+//	    cfgm.WithAppName("myapp"),
+//	    cfgm.WithEnvPrefix("MYAPP_"),
+//	    cfgm.WithCommand(cmd),
 //	)
 //
 // # 配置文件路径
@@ -52,9 +52,9 @@
 //
 // 若需自定义路径，使用 [WithConfigPaths]，它会覆盖 [WithAppName] 的自动路径：
 //
-//	mcfg.Load(config,
-//	    mcfg.WithAppName("myapp"),        // 设置应用名（仍可用于其他用途）
-//	    mcfg.WithConfigPaths("custom.yaml"), // 覆盖默认路径
+//	cfgm.Load(config,
+//	    cfgm.WithAppName("myapp"),        // 设置应用名（仍可用于其他用途）
+//	    cfgm.WithConfigPaths("custom.yaml"), // 覆盖默认路径
 //	)
 //
 // # 环境变量(前缀)
@@ -74,7 +74,7 @@
 //
 // 方式一：通过代码绑定 [WithEnvBindings]：
 //
-//	mcfg.WithEnvBindings(map[string]string{
+//	cfgm.WithEnvBindings(map[string]string{
 //	    "REDIS_URL":         "redis.url",
 //	    "ETCDCTL_ENDPOINTS": "etcd.endpoints",
 //	})
@@ -115,9 +115,9 @@
 //
 // 禁用模板展开：
 //
-//	cfg, err := mcfg.Load(Config{},
-//	    mcfg.WithConfigPaths("config.yaml"),
-//	    mcfg.WithoutTemplateExpansion(), // 禁用模板展开
+//	cfg, err := cfgm.Load(Config{},
+//	    cfgm.WithConfigPaths("config.yaml"),
+//	    cfgm.WithoutTemplateExpansion(), // 禁用模板展开
 //	)
 //
 // # CLI Flag 映射
@@ -140,23 +140,23 @@
 //
 // 使用 [ExampleYAML] 根据配置结构体序列化为带注释的 YAML：
 //
-//	yaml := mcfg.ExampleYAML(defaultConfig)
+//	yaml := cfgm.ExampleYAML(defaultConfig)
 //	os.WriteFile("config.example.yaml", yaml, 0644)
 //
 // 使用 [MarshalJSON] 序列化为 JSON：
 //
-//	jsonBytes := mcfg.MarshalJSON(defaultConfig)
+//	jsonBytes := cfgm.MarshalJSON(defaultConfig)
 //	os.WriteFile("config.json", jsonBytes, 0644)
 //
 // # 测试辅助
 //
 // 使用 [ConfigTestHelper] 提供测试辅助功能：
 //
-//	var helper = mcfg.ConfigTestHelper[Config]{
+//	var helper = cfgm.ConfigTestHelper[Config]{
 //	    ExamplePath: "config/config.example.yaml",
 //	    ConfigPath:  "config/config.yaml",
 //	}
 //
 //	func TestWriteExample(t *testing.T) { helper.WriteExampleFile(t, DefaultConfig()) }
 //	func TestConfigKeysValid(t *testing.T) { helper.ValidateKeys(t) }
-package mcfg
+package cfgm

@@ -13,9 +13,9 @@ import (
 	"github.com/lwmacct/251207-go-pkg-version/pkg/version"
 	"github.com/urfave/cli/v3"
 
-	"github.com/lwmacct/251207-go-pkg-mcfg/internal/command"
-	"github.com/lwmacct/251207-go-pkg-mcfg/internal/config"
-	"github.com/lwmacct/251207-go-pkg-mcfg/pkg/mcfg"
+	"github.com/lwmacct/251207-go-pkg-cfgm/internal/command"
+	"github.com/lwmacct/251207-go-pkg-cfgm/internal/config"
+	"github.com/lwmacct/251207-go-pkg-cfgm/pkg/cfgm"
 )
 
 // Command 客户端命令
@@ -64,7 +64,7 @@ func action(ctx context.Context, cmd *cli.Command) error {
 
 func healthAction(ctx context.Context, cmd *cli.Command) error {
 
-	cfg, err := mcfg.LoadCmd(cmd, config.DefaultConfig(), version.GetAppRawName())
+	cfg, err := cfgm.LoadCmd(cmd, config.DefaultConfig(), version.GetAppRawName())
 	if err != nil {
 		return err
 	}
@@ -82,7 +82,7 @@ func healthAction(ctx context.Context, cmd *cli.Command) error {
 
 func getAction(ctx context.Context, cmd *cli.Command) error {
 
-	cfg, err := mcfg.LoadCmd(cmd, config.DefaultConfig(), version.GetAppRawName())
+	cfg, err := cfgm.LoadCmd(cmd, config.DefaultConfig(), version.GetAppRawName())
 	if err != nil {
 		return err
 	}

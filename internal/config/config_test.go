@@ -3,10 +3,10 @@ package config
 import (
 	"testing"
 
-	"github.com/lwmacct/251207-go-pkg-mcfg/pkg/mcfg"
+	"github.com/lwmacct/251207-go-pkg-cfgm/pkg/cfgm"
 )
 
-var helper = mcfg.ConfigTestHelper[Config]{
+var helper = cfgm.ConfigTestHelper[Config]{
 	ExamplePath: "config/config.example.yaml",
 	ConfigPath:  "config/config.yaml",
 }

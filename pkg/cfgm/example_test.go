@@ -1,22 +1,22 @@
 // Author: lwmacct (https://github.com/lwmacct)
-package mcfg_test
+package cfgm_test
 
 import (
 	"fmt"
 	"os"
 	"time"
 
-	"github.com/lwmacct/251207-go-pkg-mcfg/pkg/mcfg"
+	"github.com/lwmacct/251207-go-pkg-cfgm/pkg/cfgm"
 )
 
 // Example_defaultPaths 演示如何获取默认配置文件搜索路径
 func Example_defaultPaths() {
 	// 不指定应用名称时，返回基础路径
-	paths := mcfg.DefaultPaths()
+	paths := cfgm.DefaultPaths()
 	fmt.Println("基础路径数量:", len(paths))
 
 	// 指定应用名称时，会包含应用专属配置路径
-	paths = mcfg.DefaultPaths("myapp")
+	paths = cfgm.DefaultPaths("myapp")
 	fmt.Println("带应用名路径数量:", len(paths))
 
 	// Output:
@@ -50,7 +50,7 @@ func Example_exampleYAML() {
 	}
 
 	// 生成 YAML 示例
-	yaml := mcfg.ExampleYAML(defaultCfg)
+	yaml := cfgm.ExampleYAML(defaultCfg)
 	fmt.Println(string(yaml))
 
 	// Output:
@@ -85,8 +85,8 @@ func Example_load() {
 
 	// 使用函数选项模式加载配置
 	// 配置文件不存在时，使用默认值
-	cfg, err := mcfg.Load(defaultCfg,
-		mcfg.WithConfigPaths("nonexistent.yaml"),
+	cfg, err := cfgm.Load(defaultCfg,
+		cfgm.WithConfigPaths("nonexistent.yaml"),
 	)
 	if err != nil {
 		fmt.Println("加载失败:", err)
@@ -119,8 +119,8 @@ func Example_load_withEnvPrefix() {
 
 	// 使用环境变量前缀 "MYAPP_"
 	// 支持的环境变量：MYAPP_NAME, MYAPP_DEBUG
-	cfg, err := mcfg.Load(defaultCfg,
-		mcfg.WithEnvPrefix("MYAPP_"),
+	cfg, err := cfgm.Load(defaultCfg,
+		cfgm.WithEnvPrefix("MYAPP_"),
 	)
 	if err != nil {
 		fmt.Println("加载失败:", err)
@@ -159,8 +159,8 @@ func Example_load_withEnvBindings() {
 
 	// 绑定 REDIS_URL 环境变量到 redis.url 配置路径
 	// 如果设置了 REDIS_URL=redis://prod:6379，则 cfg.Redis.URL 为该值
-	cfg, err := mcfg.Load(defaultCfg,
-		mcfg.WithEnvBindings(map[string]string{
+	cfg, err := cfgm.Load(defaultCfg,
+		cfgm.WithEnvBindings(map[string]string{
 			"REDIS_URL": "redis.url",
 		}),
 	)
@@ -216,9 +216,9 @@ redis:
 
 	// 从配置文件的 envbind 节点读取绑定关系
 	// 如果设置了 REDIS_URL 环境变量，则会覆盖 redis.url
-	cfg, err := mcfg.Load(defaultCfg,
-		mcfg.WithConfigPaths(tmpFile),
-		mcfg.WithEnvBindKey("envbind"),
+	cfg, err := cfgm.Load(defaultCfg,
+		cfgm.WithConfigPaths(tmpFile),
+		cfgm.WithEnvBindKey("envbind"),
 	)
 	if err != nil {
 		fmt.Println("加载失败:", err)
@@ -256,7 +256,7 @@ func Example_marshalJSON() {
 	}
 
 	// 生成 JSON
-	jsonBytes := mcfg.MarshalJSON(defaultCfg)
+	jsonBytes := cfgm.MarshalJSON(defaultCfg)
 	fmt.Println(string(jsonBytes))
 
 	// Output:
@@ -299,8 +299,8 @@ func Example_load_withJSONConfig() {
 	}
 
 	// 根据 .json 扩展名自动使用 JSON 解析器
-	cfg, err := mcfg.Load(defaultCfg,
-		mcfg.WithConfigPaths(tmpFile),
+	cfg, err := cfgm.Load(defaultCfg,
+		cfgm.WithConfigPaths(tmpFile),
 	)
 	if err != nil {
 		fmt.Println("加载失败:", err)
@@ -331,8 +331,8 @@ func Example_withAppName() {
 
 	// 使用 WithAppName 设置应用名称
 	// 会自动搜索 .myapp.yaml, ~/.myapp.yaml, /etc/myapp/config.yaml 等路径
-	cfg, err := mcfg.Load(defaultCfg,
-		mcfg.WithAppName("myapp"),
+	cfg, err := cfgm.Load(defaultCfg,
+		cfgm.WithAppName("myapp"),
 	)
 	if err != nil {
 		fmt.Println("加载失败:", err)

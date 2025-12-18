@@ -1,4 +1,4 @@
-package mcfg
+package cfgm
 
 import (
 	"fmt"
@@ -17,7 +17,7 @@ import (
 	"github.com/knadh/koanf/v2"
 	"github.com/urfave/cli/v3"
 
-	"github.com/lwmacct/251207-go-pkg-mcfg/pkg/tmpl"
+	"github.com/lwmacct/251207-go-pkg-cfgm/pkg/tmpl"
 )
 
 // options 配置加载选项。
@@ -52,9 +52,9 @@ func WithCommand(cmd *cli.Command) Option {
 //
 // 示例：
 //
-//	mcfg.Load(defaultConfig,
-//	    mcfg.WithAppName("myapp"),  // 自动搜索 .myapp.yaml 等
-//	    mcfg.WithCommand(cmd),
+//	cfgm.Load(defaultConfig,
+//	    cfgm.WithAppName("myapp"),  // 自动搜索 .myapp.yaml 等
+//	    cfgm.WithCommand(cmd),
 //	)
 func WithAppName(name string) Option {
 	return func(o *options) {
@@ -382,21 +382,21 @@ func load[T any](defaultConfig T, callerSkip int, opts ...Option) (*T, error) {
 //
 // 等价于：
 //
-//	mcfg.Load(defaultConfig,
-//	    mcfg.WithCommand(cmd),
-//	    mcfg.WithAppName(appName),  // 如果 appName 非空
+//	cfgm.Load(defaultConfig,
+//	    cfgm.WithCommand(cmd),
+//	    cfgm.WithAppName(appName),  // 如果 appName 非空
 //	    opts...,
 //	)
 //
 // 示例：
 //
 //	// 带应用名（推荐）
-//	cfg, err := mcfg.LoadCmd(cmd, DefaultConfig(), "myapp",
-//	    mcfg.WithEnvPrefix("MYAPP_"),
+//	cfg, err := cfgm.LoadCmd(cmd, DefaultConfig(), "myapp",
+//	    cfgm.WithEnvPrefix("MYAPP_"),
 //	)
 //
 //	// 不带应用名
-//	cfg, err := mcfg.LoadCmd(cmd, DefaultConfig(), "")
+//	cfg, err := cfgm.LoadCmd(cmd, DefaultConfig(), "")
 func LoadCmd[T any](cmd *cli.Command, defaultConfig T, appName string, opts ...Option) (*T, error) {
 	baseOpts := []Option{WithCommand(cmd)}
 	if appName != "" {
@@ -412,14 +412,14 @@ func LoadCmd[T any](cmd *cli.Command, defaultConfig T, appName string, opts ...O
 //
 // 示例：
 //
-//	cfg := mcfg.MustLoad(DefaultConfig(),
-//	    mcfg.WithAppName("myapp"),
-//	    mcfg.WithEnvPrefix("MYAPP_"),
+//	cfg := cfgm.MustLoad(DefaultConfig(),
+//	    cfgm.WithAppName("myapp"),
+//	    cfgm.WithEnvPrefix("MYAPP_"),
 //	)
 func MustLoad[T any](defaultConfig T, opts ...Option) *T {
 	cfg, err := load(defaultConfig, 2, opts...)
 	if err != nil {
-		panic(fmt.Sprintf("mcfg: failed to load config: %v", err))
+		panic(fmt.Sprintf("cfgm: failed to load config: %v", err))
 	}
 	return cfg
 }
@@ -431,8 +431,8 @@ func MustLoad[T any](defaultConfig T, opts ...Option) *T {
 //
 // 示例：
 //
-//	cfg := mcfg.MustLoadCmd(cmd, DefaultConfig(), "myapp",
-//	    mcfg.WithEnvPrefix("MYAPP_"),
+//	cfg := cfgm.MustLoadCmd(cmd, DefaultConfig(), "myapp",
+//	    cfgm.WithEnvPrefix("MYAPP_"),
 //	)
 func MustLoadCmd[T any](cmd *cli.Command, defaultConfig T, appName string, opts ...Option) *T {
 	baseOpts := []Option{WithCommand(cmd)}
@@ -441,7 +441,7 @@ func MustLoadCmd[T any](cmd *cli.Command, defaultConfig T, appName string, opts 
 	}
 	cfg, err := load(defaultConfig, 2, append(baseOpts, opts...)...)
 	if err != nil {
-		panic(fmt.Sprintf("mcfg: failed to load config: %v", err))
+		panic(fmt.Sprintf("cfgm: failed to load config: %v", err))
 	}
 	return cfg
 }
