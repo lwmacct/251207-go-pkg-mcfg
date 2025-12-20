@@ -24,6 +24,7 @@ func writeTempConfig(t *testing.T, content string) string {
 	require.NoError(t, err, "Failed to write temp file")
 	_ = tmpFile.Close()
 	t.Cleanup(func() { _ = os.Remove(tmpFile.Name()) })
+
 	return tmpFile.Name()
 }
 
@@ -42,12 +43,14 @@ func runCLITest[T any](t *testing.T, defaultCfg T, flags []cli.Flag, args []stri
 				return err
 			}
 			loadedCfg = cfg
+
 			return nil
 		},
 	}
 	err := cmd.Run(context.Background(), args)
 	require.NoError(t, err, "Command should run successfully")
 	require.NotNil(t, loadedCfg, "Config should be loaded")
+
 	return loadedCfg
 }
 
@@ -443,6 +446,7 @@ func TestLoadWithCommand_SubCommands(t *testing.T) {
 			}
 			loadedCfg = cfg
 			executed = true
+
 			return nil
 		},
 	}
@@ -958,6 +962,7 @@ func writeTempJSONConfig(t *testing.T, content string) string {
 	require.NoError(t, err, "Failed to write temp file")
 	_ = tmpFile.Close()
 	t.Cleanup(func() { _ = os.Remove(tmpFile.Name()) })
+
 	return tmpFile.Name()
 }
 

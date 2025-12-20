@@ -90,6 +90,7 @@ func Example_load() {
 	)
 	if err != nil {
 		fmt.Println("加载失败:", err)
+
 		return
 	}
 
@@ -124,6 +125,7 @@ func Example_load_withEnvPrefix() {
 	)
 	if err != nil {
 		fmt.Println("加载失败:", err)
+
 		return
 	}
 
@@ -166,6 +168,7 @@ func Example_load_withEnvBindings() {
 	)
 	if err != nil {
 		fmt.Println("加载失败:", err)
+
 		return
 	}
 
@@ -203,6 +206,7 @@ redis:
 	tmpFile := "/tmp/example_envbindkey_test.yaml"
 	if err := os.WriteFile(tmpFile, []byte(configContent), 0600); err != nil {
 		fmt.Println("创建临时文件失败:", err)
+
 		return
 	}
 	defer func() { _ = os.Remove(tmpFile) }()
@@ -222,6 +226,7 @@ redis:
 	)
 	if err != nil {
 		fmt.Println("加载失败:", err)
+
 		return
 	}
 
@@ -289,6 +294,7 @@ func Example_load_withJSONConfig() {
 	tmpFile := "/tmp/example_json_test.json"
 	if err := os.WriteFile(tmpFile, []byte(configContent), 0600); err != nil {
 		fmt.Println("创建临时文件失败:", err)
+
 		return
 	}
 	defer func() { _ = os.Remove(tmpFile) }()
@@ -304,6 +310,7 @@ func Example_load_withJSONConfig() {
 	)
 	if err != nil {
 		fmt.Println("加载失败:", err)
+
 		return
 	}
 
@@ -336,6 +343,7 @@ func Example_withAppName() {
 	)
 	if err != nil {
 		fmt.Println("加载失败:", err)
+
 		return
 	}
 

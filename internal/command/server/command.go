@@ -105,9 +105,11 @@ func action(ctx context.Context, cmd *cli.Command) error {
 	err := server.Shutdown(shutdownCtx)
 	if err != nil {
 		slog.Error("Server shutdown failed", "error", err)
+
 		return fmt.Errorf("server shutdown failed: %w", err)
 	}
 
 	slog.Info("Server stopped gracefully")
+
 	return nil
 }

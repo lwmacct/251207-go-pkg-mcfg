@@ -231,7 +231,7 @@ func Load[T any](defaultConfig T, opts ...Option) (*T, error) {
 //   - MustLoad: skip=2 (MustLoad → load → FindProjectRoot)
 //   - MustLoadCmd: skip=2 (MustLoadCmd → load → FindProjectRoot)
 //
-//nolint:gocyclo // complexity from handling multiple config sources
+
 func load[T any](defaultConfig T, callerSkip int, opts ...Option) (*T, error) {
 	// 解析选项
 	options := &options{}
@@ -299,6 +299,7 @@ func load[T any](defaultConfig T, callerSkip int, opts ...Option) (*T, error) {
 
 		slog.Debug("Loaded config from file", "path", path, "templateExpansion", !options.noTemplateExpansion)
 		configLoaded = true
+
 		break
 	}
 
@@ -308,27 +309,7 @@ func load[T any](defaultConfig T, callerSkip int, opts ...Option) (*T, error) {
 
 	// 2.5️⃣ 从配置文件读取环境变量绑定 (在加载配置文件后)
 	if options.envBindKey != "" {
-		if bindings := k.StringMap(options.envBindKey); len(bindings) > 0 {
-			// 构建已绑定配置路径的集合（代码中的绑定优先）
-			boundPaths := make(map[string]bool)
-			for _, configPath := range options.envBindings {
-				boundPaths[configPath] = true
-			}
-
-			// 合并配置文件绑定（仅当配置路径未被绑定时）
-			for envKey, configPath := range bindings {
-				if !boundPaths[configPath] {
-					if options.envBindings == nil {
-						options.envBindings = make(map[string]string)
-					}
-					options.envBindings[envKey] = configPath
-					boundPaths[configPath] = true
-				}
-			}
-			// 删除绑定节点，不污染用户配置
-			k.Delete(options.envBindKey)
-			slog.Debug("Loaded env bindings from config", "key", options.envBindKey, "count", len(bindings))
-		}
+		options.envBindings = mergeEnvBindingsFromConfig(k, options.envBindKey, options.envBindings)
 	}
 
 	// 3️⃣ 自动生成环境变量绑定 (基于配置结构体的 koanf key)
@@ -423,6 +404,7 @@ func MustLoad[T any](defaultConfig T, opts ...Option) *T {
 	if err != nil {
 		panic(fmt.Sprintf("cfgm: failed to load config: %v", err))
 	}
+
 	return cfg
 }
 
@@ -445,6 +427,7 @@ func MustLoadCmd[T any](cmd *cli.Command, defaultConfig T, appName string, opts 
 	if err != nil {
 		panic(fmt.Sprintf("cfgm: failed to load config: %v", err))
 	}
+
 	return cfg
 }
 
@@ -455,6 +438,7 @@ func MustLoadCmd[T any](cmd *cli.Command, defaultConfig T, appName string, opts 
 func collectKoanfKeys[T any](defaultConfig T) []string {
 	var keys []string
 	collectKoanfKeysRecursive(reflect.TypeOf(defaultConfig), "", &keys)
+
 	return keys
 }
 
@@ -487,11 +471,47 @@ func collectKoanfKeysRecursive(typ reflect.Type, prefix string, keys *[]string) 
 			field.Type != reflect.TypeFor[time.Duration]() &&
 			field.Type != reflect.TypeFor[time.Time]() {
 			collectKoanfKeysRecursive(field.Type, fullKey, keys)
+
 			continue
 		}
 
 		*keys = append(*keys, fullKey)
 	}
+}
+
+// mergeEnvBindingsFromConfig 从配置文件读取环境变量绑定并合并到现有绑定中。
+// 代码中的绑定优先，配置文件中的绑定仅用于填充未绑定的配置路径。
+func mergeEnvBindingsFromConfig(k *koanf.Koanf, bindKey string, existing map[string]string) map[string]string {
+	bindings := k.StringMap(bindKey)
+	if len(bindings) == 0 {
+		return existing
+	}
+
+	// 构建已绑定配置路径的集合（代码中的绑定优先）
+	boundPaths := make(map[string]bool)
+	for _, configPath := range existing {
+		boundPaths[configPath] = true
+	}
+
+	// 确保结果 map 已初始化
+	result := existing
+	if result == nil {
+		result = make(map[string]string)
+	}
+
+	// 合并配置文件绑定（仅当配置路径未被绑定时）
+	for envKey, configPath := range bindings {
+		if !boundPaths[configPath] {
+			result[envKey] = configPath
+			boundPaths[configPath] = true
+		}
+	}
+
+	// 删除绑定节点，不污染用户配置
+	k.Delete(bindKey)
+	slog.Debug("Loaded env bindings from config", "key", bindKey, "count", len(bindings))
+
+	return result
 }
 
 // generateEnvBindings 根据 koanf key 生成环境变量绑定。
@@ -511,6 +531,7 @@ func generateEnvBindings(prefix string, koanfKeys []string) map[string]string {
 		envKey := strings.ToUpper(strings.NewReplacer(".", "_", "-", "_").Replace(key))
 		bindings[prefix+envKey] = key
 	}
+
 	return bindings
 }
 
@@ -523,6 +544,7 @@ func parserForPath(path string) koanf.Parser {
 	if strings.ToLower(filepath.Ext(path)) == ".json" {
 		return json.Parser()
 	}
+
 	return yaml.Parser()
 }
 
@@ -572,6 +594,7 @@ func applyCLIFlagsRecursive(cmd *cli.Command, k *koanf.Koanf, typ reflect.Type, 
 			field.Type != reflect.TypeFor[time.Duration]() &&
 			field.Type != reflect.TypeFor[time.Time]() {
 			applyCLIFlagsRecursive(cmd, k, field.Type, fullKoanfKey)
+
 			continue
 		}
 
@@ -616,9 +639,11 @@ func setCLIFlagValue(cmd *cli.Command, k *koanf.Koanf, koanfKey, cliFlag string,
 	switch fieldType {
 	case reflect.TypeFor[time.Duration]():
 		_ = k.Set(koanfKey, cmd.Duration(cliFlag))
+
 		return
 	case reflect.TypeFor[time.Time]():
 		_ = k.Set(koanfKey, cmd.Timestamp(cliFlag))
+
 		return
 	}
 
@@ -681,6 +706,7 @@ func setSliceFlagValue(cmd *cli.Command, k *koanf.Koanf, koanfKey, cliFlag strin
 	// 先检查特殊元素类型
 	if elemType == reflect.TypeFor[time.Time]() {
 		_ = k.Set(koanfKey, cmd.TimestampArgs(cliFlag))
+
 		return
 	}
 

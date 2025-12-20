@@ -77,6 +77,7 @@ func healthAction(ctx context.Context, cmd *cli.Command) error {
 
 	_, _ = fmt.Fprintf(os.Stdout, "Server: %s\n", cfg.Client.URL)
 	_, _ = fmt.Fprintf(os.Stdout, "Status: %s\n", resp.Status)
+
 	return nil
 }
 
@@ -98,6 +99,7 @@ func getAction(ctx context.Context, cmd *cli.Command) error {
 	}
 
 	_, _ = fmt.Fprintln(os.Stdout, body)
+
 	return nil
 }
 
@@ -132,6 +134,7 @@ func (c *HTTPClient) Health(ctx context.Context) (*HealthResponse, error) {
 		if err != nil {
 			lastErr = err
 			slog.Debug("Health check attempt failed", "attempt", i+1, "error", err)
+
 			continue
 		}
 
@@ -139,6 +142,7 @@ func (c *HTTPClient) Health(ctx context.Context) (*HealthResponse, error) {
 		if err := json.Unmarshal([]byte(resp), &health); err != nil {
 			return nil, fmt.Errorf("failed to parse health response: %w", err)
 		}
+
 		return &health, nil
 	}
 
@@ -158,8 +162,10 @@ func (c *HTTPClient) Get(ctx context.Context, path string) (string, error) {
 		if err != nil {
 			lastErr = err
 			slog.Debug("GET request attempt failed", "attempt", i+1, "error", err)
+
 			continue
 		}
+
 		return resp, nil
 	}
 

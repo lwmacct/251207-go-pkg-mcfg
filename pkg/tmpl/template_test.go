@@ -39,6 +39,7 @@ func TestTemplateFunction_env(t *testing.T) {
 			got, err := tmpl.ExpandTemplate(tt.template)
 			if tt.wantErr {
 				assert.Error(t, err)
+
 				return
 			}
 			require.NoError(t, err)
@@ -71,6 +72,7 @@ func TestTemplateFunction_default(t *testing.T) {
 			got, err := tmpl.ExpandTemplate(tt.template)
 			if tt.wantErr {
 				assert.Error(t, err)
+
 				return
 			}
 			require.NoError(t, err)
@@ -115,6 +117,7 @@ func TestTemplateFunction_coalesce(t *testing.T) {
 			got, err := tmpl.ExpandTemplate(tt.template)
 			if tt.wantErr {
 				assert.Error(t, err)
+
 				return
 			}
 			require.NoError(t, err)
@@ -164,6 +167,7 @@ func TestTemplateData_DirectVarAccess(t *testing.T) {
 			got, err := tmpl.ExpandTemplate(tt.template)
 			if tt.wantErr {
 				assert.Error(t, err)
+
 				return
 			}
 			require.NoError(t, err)

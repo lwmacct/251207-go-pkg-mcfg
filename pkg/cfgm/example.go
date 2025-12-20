@@ -38,6 +38,7 @@ func ExampleYAML[T any](cfg T) []byte {
 	enc.SetIndent(2)
 	_ = enc.Encode(node)
 	_ = enc.Close()
+
 	return buf.Bytes()
 }
 
@@ -53,6 +54,7 @@ func MarshalYAML[T any](cfg T) []byte {
 	k := koanf.New(".")
 	_ = k.Load(structs.Provider(cfg, "koanf"), nil)
 	data, _ := k.Marshal(yaml.Parser())
+
 	return data
 }
 
@@ -67,6 +69,7 @@ func MarshalJSON[T any](cfg T) []byte {
 	enc := json.NewEncoder(&buf)
 	enc.SetIndent("", "  ")
 	_ = enc.Encode(cfg) //nolint:errchkjson // T is a config struct, safe to encode
+
 	return buf.Bytes()
 }
 
@@ -105,27 +108,33 @@ func structToNode(val reflect.Value, typ reflect.Type) *yamlv3.Node {
 			field.Type != reflect.TypeFor[time.Time]()
 		isSlice := field.Type.Kind() == reflect.Slice
 
-		if isStruct || isSlice {
-			if isStruct {
-				valNode = structToNode(fieldVal, field.Type)
-			} else {
-				valNode = valueToNode(fieldVal, field.Type)
-			}
+		switch {
+		case isStruct:
+			valNode = structToNode(fieldVal, field.Type)
 			keyNode.HeadComment = "\n" + comment // 复杂类型注释放在 key 上方，前面加空行
-		} else {
+		case isSlice:
+			valNode = valueToNode(fieldVal, field.Type)
+			keyNode.HeadComment = "\n" + comment // 复杂类型注释放在 key 上方，前面加空行
+		default:
 			valNode = valueToNode(fieldVal, field.Type)
 			// 多行注释放在 key 上方（HeadComment），单行注释放在行尾（LineComment）
-			if strings.Contains(comment, "\n") {
-				keyNode.HeadComment = "\n" + comment
-			} else {
-				valNode.LineComment = comment
-			}
+			setSimpleFieldComment(keyNode, valNode, comment)
 		}
 
 		node.Content = append(node.Content, keyNode, valNode)
 	}
 
 	return node
+}
+
+// setSimpleFieldComment 设置简单字段的注释。
+// 多行注释放在 key 上方（HeadComment），单行注释放在行尾（LineComment）。
+func setSimpleFieldComment(keyNode, valNode *yamlv3.Node, comment string) {
+	if strings.Contains(comment, "\n") {
+		keyNode.HeadComment = "\n" + comment
+	} else {
+		valNode.LineComment = comment
+	}
 }
 
 // valueToNode 将值转换为 yamlv3.Node。
@@ -193,6 +202,7 @@ func valueToNode(val reflect.Value, typ reflect.Type) *yamlv3.Node {
 				node.Content = append(node.Content, elemNode)
 			}
 		}
+
 		return node
 
 	case reflect.Map:
@@ -209,6 +219,7 @@ func valueToNode(val reflect.Value, typ reflect.Type) *yamlv3.Node {
 				)
 			}
 		}
+
 		return node
 
 	default:
@@ -334,5 +345,6 @@ func loadConfigKeys(path string) ([]string, error) {
 	if err != nil {
 		return nil, fmt.Errorf("加载文件失败: %w", err)
 	}
+
 	return k.Keys(), nil
 }

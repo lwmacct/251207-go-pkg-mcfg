@@ -31,6 +31,7 @@ func envFunc(key string, defaultVal ...string) string {
 	if len(defaultVal) > 0 {
 		return defaultVal[0]
 	}
+
 	return ""
 }
 
@@ -48,6 +49,7 @@ func defaultFunc(defaultVal, value any) any {
 	if str, ok := value.(string); ok && str == "" {
 		return defaultVal
 	}
+
 	return value
 }
 
@@ -64,8 +66,10 @@ func coalesceFunc(values ...any) any {
 		if str, ok := v.(string); ok && str == "" {
 			continue
 		}
+
 		return v
 	}
+
 	return nil
 }
 
@@ -85,6 +89,7 @@ func newTemplateData() map[string]string {
 			vars[parts[0]] = parts[1]
 		}
 	}
+
 	return vars
 }
 
