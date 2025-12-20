@@ -83,7 +83,8 @@ func action(ctx context.Context, cmd *cli.Command) error {
 	// 启动服务器（非阻塞）
 	go func() {
 		slog.Info("Server starting", "addr", cfg.Server.Addr)
-		if err := server.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
+		err := server.ListenAndServe()
+		if err != nil && !errors.Is(err, http.ErrServerClosed) {
 			slog.Error("Server error", "error", err)
 			os.Exit(1)
 		}
@@ -100,7 +101,8 @@ func action(ctx context.Context, cmd *cli.Command) error {
 	shutdownCtx, cancel := context.WithTimeout(context.Background(), cfg.Server.Timeout)
 	defer cancel()
 
-	if err := server.Shutdown(shutdownCtx); err != nil {
+	err := server.Shutdown(shutdownCtx)
+	if err != nil {
 		slog.Error("Server shutdown failed", "error", err)
 		return fmt.Errorf("server shutdown failed: %w", err)
 	}

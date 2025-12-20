@@ -330,7 +330,8 @@ func FindProjectRoot(skip int) (string, error) {
 // loadConfigKeys 加载配置文件并返回所有配置键（支持 YAML 和 JSON）。
 func loadConfigKeys(path string) ([]string, error) {
 	k := koanf.New(".")
-	if err := k.Load(file.Provider(path), parserForPath(path)); err != nil {
+	err := k.Load(file.Provider(path), parserForPath(path))
+	if err != nil {
 		return nil, fmt.Errorf("加载文件失败: %w", err)
 	}
 	return k.Keys(), nil
