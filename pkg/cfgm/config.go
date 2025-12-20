@@ -648,7 +648,7 @@ func setCLIFlagValue(cmd *cli.Command, k *koanf.Koanf, koanfKey, cliFlag string,
 	}
 
 	// 处理基本类型和切片
-	switch fieldType.Kind() { //nolint:exhaustive // only handle supported types
+	switch fieldType.Kind() {
 	// 字符串
 	case reflect.String:
 		_ = k.Set(koanfKey, cmd.String(cliFlag))
@@ -696,6 +696,9 @@ func setCLIFlagValue(cmd *cli.Command, k *koanf.Koanf, koanfKey, cliFlag string,
 		if fieldType.Key().Kind() == reflect.String && fieldType.Elem().Kind() == reflect.String {
 			_ = k.Set(koanfKey, cmd.StringMap(cliFlag))
 		}
+
+	default:
+		// 不支持的类型，忽略
 	}
 }
 
@@ -710,7 +713,7 @@ func setSliceFlagValue(cmd *cli.Command, k *koanf.Koanf, koanfKey, cliFlag strin
 		return
 	}
 
-	switch elemType.Kind() { //nolint:exhaustive // only handle supported slice element types
+	switch elemType.Kind() {
 	case reflect.String:
 		_ = k.Set(koanfKey, cmd.StringSlice(cliFlag))
 	case reflect.Int:
@@ -731,5 +734,8 @@ func setSliceFlagValue(cmd *cli.Command, k *koanf.Koanf, koanfKey, cliFlag strin
 		_ = k.Set(koanfKey, cmd.Float32Slice(cliFlag))
 	case reflect.Float64:
 		_ = k.Set(koanfKey, cmd.Float64Slice(cliFlag))
+
+	default:
+		// 不支持的切片元素类型，忽略
 	}
 }
