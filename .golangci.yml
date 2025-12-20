@@ -42,7 +42,7 @@ linters:
     - noinlineerr # 禁止内联错误处理
     - paralleltest # 要求 t.Parallel()
     - testpackage # 要求 _test 包
-    - tparallel # t.Parallel 检查
+    # - tparallel # t.Parallel 检查
     # 特定框架
     - arangolint # ArangoDB
     - ginkgolinter # Ginkgo
