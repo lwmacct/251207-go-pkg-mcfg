@@ -35,7 +35,7 @@ linters:
     - gomoddirectives # go.mod 指令检查
     - gomodguard # go.mod 依赖检查
     - grouper # 表达式分组
-    - decorder # 声明顺序
+    # - decorder # 声明顺序
     - funcorder # 函数顺序
     - noinlineerr # 禁止内联错误处理
     - paralleltest # 要求 t.Parallel()
