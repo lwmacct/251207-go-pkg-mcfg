@@ -98,7 +98,8 @@ func action(ctx context.Context, cmd *cli.Command) error {
 	slog.Info("Shutting down")
 
 	// 优雅关闭，最多等待 10 秒
-	shutdownCtx, cancel := context.WithTimeout(context.Background(), cfg.Server.Timeout)
+	// 使用 WithoutCancel 保持 context 链，同时防止父 context 取消影响 shutdown
+	shutdownCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), cfg.Server.Timeout)
 	defer cancel()
 
 	err := server.Shutdown(shutdownCtx)

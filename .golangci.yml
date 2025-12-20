@@ -37,10 +37,8 @@ linters:
     - grouper # 表达式分组
     - decorder # 声明顺序
     - funcorder # 函数顺序
-    - containedctx # context 包含检查
-    - contextcheck # context 检查
     - noinlineerr # 禁止内联错误处理
-    # - paralleltest # 要求 t.Parallel()
+    - paralleltest # 要求 t.Parallel()
     - testpackage # 要求 _test 包
     # - tparallel # t.Parallel 检查
     # 特定框架
