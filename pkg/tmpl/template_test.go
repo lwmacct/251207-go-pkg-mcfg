@@ -1,8 +1,9 @@
-package tmpl
+package tmpl_test
 
 import (
 	"testing"
 
+	"github.com/lwmacct/251207-go-pkg-cfgm/pkg/tmpl"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -35,7 +36,7 @@ func TestTemplateFunction_env(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got, err := ExpandTemplate(tt.template)
+			got, err := tmpl.ExpandTemplate(tt.template)
 			if tt.wantErr {
 				assert.Error(t, err)
 				return
@@ -67,7 +68,7 @@ func TestTemplateFunction_default(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got, err := ExpandTemplate(tt.template)
+			got, err := tmpl.ExpandTemplate(tt.template)
 			if tt.wantErr {
 				assert.Error(t, err)
 				return
@@ -111,7 +112,7 @@ func TestTemplateFunction_coalesce(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got, err := ExpandTemplate(tt.template)
+			got, err := tmpl.ExpandTemplate(tt.template)
 			if tt.wantErr {
 				assert.Error(t, err)
 				return
@@ -160,7 +161,7 @@ func TestTemplateData_DirectVarAccess(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got, err := ExpandTemplate(tt.template)
+			got, err := tmpl.ExpandTemplate(tt.template)
 			if tt.wantErr {
 				assert.Error(t, err)
 				return
@@ -177,9 +178,9 @@ func TestExpandTemplate_JSONConfig(t *testing.T) {
 
 	jsonConfig := "{\"name\": \"{{coalesce .AGENT_NAME `test-agent`}}\", \"model\": \"{{.MODEL | default `gpt-3.5-turbo`}}\", \"api_key\": \"{{.API_KEY}}\", \"max_tokens\": 2048}"
 
-	expanded, err := ExpandTemplate(jsonConfig)
-	require.NoError(t, err, "ExpandTemplate() should succeed")
-	assert.NotEmpty(t, expanded, "ExpandTemplate() should return non-empty string")
+	expanded, err := tmpl.ExpandTemplate(jsonConfig)
+	require.NoError(t, err, "tmpl.ExpandTemplate() should succeed")
+	assert.NotEmpty(t, expanded, "tmpl.ExpandTemplate() should return non-empty string")
 	assert.Contains(t, expanded, "gpt-4", "MODEL should be expanded to gpt-4")
 	assert.Contains(t, expanded, "sk-test-123", "API_KEY should be expanded")
 }
@@ -213,8 +214,8 @@ func TestExpandTemplate_Errors(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			_, err := ExpandTemplate(tt.template)
-			require.Error(t, err, "ExpandTemplate() should return error for invalid template")
+			_, err := tmpl.ExpandTemplate(tt.template)
+			require.Error(t, err, "tmpl.ExpandTemplate() should return error for invalid template")
 			assert.Contains(t, err.Error(), tt.errMsg)
 		})
 	}
