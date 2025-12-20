@@ -142,10 +142,8 @@ func (c *HTTPClient) Health(ctx context.Context) (*HealthResponse, error) {
 		if err := json.Unmarshal([]byte(resp), &health); err != nil {
 			return nil, fmt.Errorf("failed to parse health response: %w", err)
 		}
-
 		return &health, nil
 	}
-
 	return nil, fmt.Errorf("health check failed after %d retries: %w", c.config.Retries, lastErr)
 }
 
@@ -168,7 +166,6 @@ func (c *HTTPClient) Get(ctx context.Context, path string) (string, error) {
 
 		return resp, nil
 	}
-
 	return "", fmt.Errorf("GET request failed after %d retries: %w", c.config.Retries, lastErr)
 }
 
@@ -193,6 +190,5 @@ func (c *HTTPClient) doRequest(ctx context.Context, method, url string) (string,
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
 		return "", fmt.Errorf("unexpected status code: %d, body: %s", resp.StatusCode, string(body))
 	}
-
 	return string(body), nil
 }
