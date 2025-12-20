@@ -3,9 +3,12 @@ package cfgm
 import (
 	"context"
 	"os"
+	"reflect"
 	"testing"
 	"time"
 
+	"github.com/knadh/koanf/providers/confmap"
+	"github.com/knadh/koanf/v2"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"github.com/urfave/cli/v3"
@@ -1292,4 +1295,39 @@ func TestExampleYAML_MultilineCommentYAMLValidity(t *testing.T) {
 	a.Equal("0.0.0.0", parsed.Server.Host)
 	a.Equal(8080, parsed.Server.Port)
 	a.Equal(30, parsed.Server.Timeout)
+}
+
+// =============================================================================
+// setCLIFlagValue 和 setSliceFlagValue 边界测试 (内部函数)
+// =============================================================================
+
+func TestSetCLIFlagValue_UnsupportedTypes(t *testing.T) {
+	// 测试不支持的类型触发 default case
+	// 这些类型在正常 CLI 使用中不会出现，但需要测试覆盖
+
+	var loadedCfg map[string]any
+	cmd := &cli.Command{
+		Name: "test",
+		Flags: []cli.Flag{
+			&cli.StringFlag{Name: "dummy", Value: "test"},
+		},
+		Action: func(ctx context.Context, c *cli.Command) error {
+			k := koanf.New(".")
+			_ = k.Load(confmap.Provider(map[string]any{"dummy": "initial"}, "."), nil)
+
+			// 测试不支持的基本类型 (complex128)
+			setCLIFlagValue(c, k, "dummy", "dummy", reflect.TypeFor[complex128]())
+			// 测试不支持的切片元素类型
+			setSliceFlagValue(c, k, "dummy", "dummy", reflect.TypeFor[[]complex128]())
+
+			loadedCfg = k.All()
+
+			return nil
+		},
+	}
+
+	err := cmd.Run(context.Background(), []string{"test", "--dummy", "value"})
+	require.NoError(t, err)
+	// 不支持的类型不会修改值
+	assert.Equal(t, "initial", loadedCfg["dummy"])
 }
