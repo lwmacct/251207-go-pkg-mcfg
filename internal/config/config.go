@@ -9,10 +9,6 @@ package config
 
 import (
 	"time"
-
-	"github.com/lwmacct/251207-go-pkg-cfgm/pkg/cfgm"
-	"github.com/lwmacct/251207-go-pkg-version/pkg/version"
-	"github.com/urfave/cli/v3"
 )
 
 // Config 应用配置
@@ -52,15 +48,4 @@ func DefaultConfig() Config {
 			Retries: 3,
 		},
 	}
-}
-
-// LoadCmd 使用 CLI 命令加载配置
-//
-// cfg := config.LoadCmd(cmd)
-func LoadCmd(cmd *cli.Command) *Config {
-	cfg, err := cfgm.LoadCmd(cmd, DefaultConfig(), version.GetAppRawName())
-	if err != nil {
-		panic(err)
-	}
-	return cfg
 }
