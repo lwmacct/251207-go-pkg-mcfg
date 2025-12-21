@@ -21,5 +21,17 @@
 //   - default: 管道默认值 {{.VAR | default "fallback"}}
 //   - coalesce: 返回第一个非空值 {{coalesce .VAR1 .VAR2 "default"}}
 //
+// # 快速开始
+//
+// 展开配置文件中的环境变量引用：
+//
+//	content := `api_key: "{{.OPENAI_API_KEY}}"`
+//	expanded, err := tmpl.ExpandTemplate(content)
+//
+// 使用默认值处理缺失的环境变量：
+//
+//	content := `model: "{{.LLM_MODEL | default "gpt-4"}}"`
+//	expanded, err := tmpl.ExpandTemplate(content)
+//
 // 详见 [ExpandTemplate] 文档。
 package tmpl

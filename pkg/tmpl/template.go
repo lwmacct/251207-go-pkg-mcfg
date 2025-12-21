@@ -8,22 +8,22 @@ import (
 )
 
 // ═══════════════════════════════════════════════════════════════════════════
-// Template Functions (Reference: Taskfile and Sprig)
+// 模板函数 (参考: Taskfile 和 Sprig)
 // ═══════════════════════════════════════════════════════════════════════════
 
-// templateFuncs template function map
+// templateFuncs 模板函数映射表
 var templateFuncs = template.FuncMap{
 	"env":      envFunc,
 	"default":  defaultFunc,
 	"coalesce": coalesceFunc,
 }
 
-// envFunc gets environment variable with optional default value
+// envFunc 获取环境变量，支持可选的默认值。
 //
-// Usage:
-//   - {{env "VAR"}}           get env var, returns empty string if not set
-//   - {{env "VAR" "default"}} get env var, returns default if not set
-//   - {{env "VAR" | default "fallback"}} pipeline syntax
+// 使用方式：
+//   - {{env "VAR"}}           获取环境变量，未设置时返回空字符串
+//   - {{env "VAR" "default"}} 获取环境变量，未设置时返回默认值
+//   - {{env "VAR" | default "fallback"}} 管道语法
 func envFunc(key string, defaultVal ...string) string {
 	if val := os.Getenv(key); val != "" {
 		return val
@@ -35,11 +35,11 @@ func envFunc(key string, defaultVal ...string) string {
 	return ""
 }
 
-// defaultFunc provides default value (pipeline friendly)
+// defaultFunc 提供默认值（管道友好）。
 //
-// Reference: Sprig implementation, parameter order: default(defaultValue, value)
+// 参考 Sprig 实现，参数顺序：default(默认值, 实际值)
 //
-// Usage:
+// 使用方式：
 //   - {{env "VAR" | default "fallback"}}
 //   - {{.Env.VAR | default .Env.OTHER | default "final"}}
 func defaultFunc(defaultVal, value any) any {
@@ -53,9 +53,9 @@ func defaultFunc(defaultVal, value any) any {
 	return value
 }
 
-// coalesceFunc returns first non-empty value (like Taskfile/Sprig)
+// coalesceFunc 返回第一个非空值（类似 Taskfile/Sprig）。
 //
-// Usage:
+// 使用方式：
 //   - {{coalesce .Env.VAR1 .Env.VAR2 "default"}}
 //   - {{coalesce .APIKey .Env.OPENAI_API_KEY .Env.ANTHROPIC_API_KEY "sk-xxx"}}
 func coalesceFunc(values ...any) any {
@@ -74,13 +74,13 @@ func coalesceFunc(values ...any) any {
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
-// Template Data Object (Aligns with Taskfile design)
+// 模板数据对象 (与 Taskfile 设计对齐)
 // ═══════════════════════════════════════════════════════════════════════════
 
-// newTemplateData creates template data object
+// newTemplateData 创建模板数据对象。
 //
-// Returns map[string]string, supporting Taskfile style {{.VAR}} syntax
-// All environment variables are automatically loaded into top-level namespace
+// 返回 map[string]string，支持 Taskfile 风格的 {{.VAR}} 语法。
+// 所有环境变量自动加载到顶级命名空间。
 func newTemplateData() map[string]string {
 	vars := make(map[string]string)
 	for _, env := range os.Environ() {
@@ -94,7 +94,7 @@ func newTemplateData() map[string]string {
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
-// Template Rendering
+// 模板渲染
 // ═══════════════════════════════════════════════════════════════════════════
 
 // ExpandTemplate 展开模板字符串中的环境变量引用。
