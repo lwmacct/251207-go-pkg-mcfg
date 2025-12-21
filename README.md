@@ -1,22 +1,5 @@
 # go-pkg-config
 
-<!--TOC-->
-
-- [特性](#特性) `:29+10`
-- [安装](#安装) `:39+6`
-- [快速开始](#快速开始) `:45+188`
-  - [1. 定义配置结构体](#1-定义配置结构体) `:47+34`
-  - [2. 加载配置](#2-加载配置) `:81+35`
-  - [3. 环境变量](#3-环境变量) `:116+54`
-  - [4. 测试驱动的配置管理](#4-测试驱动的配置管理) `:170+63`
-- [模板语法](#模板语法) `:233+52`
-  - [基本语法](#基本语法) `:241+10`
-  - [内置函数](#内置函数) `:251+21`
-  - [使用示例](#使用示例) `:272+13`
-- [License](#license) `:285+3`
-
-<!--TOC-->
-
 [![License](https://img.shields.io/github/license/lwmacct/251207-go-pkg-cfgm)](LICENSE)
 [![Go Reference](https://pkg.go.dev/badge/github.com/lwmacct/251207-go-pkg-cfgm.svg)](https://pkg.go.dev/github.com/lwmacct/251207-go-pkg-cfgm)
 [![Go CI](https://github.com/lwmacct/251207-go-pkg-cfgm/actions/workflows/go-ci.yml/badge.svg)](https://github.com/lwmacct/251207-go-pkg-cfgm/actions/workflows/go-ci.yml)
@@ -25,6 +8,25 @@
 [![GitHub Tag](https://img.shields.io/github/v/tag/lwmacct/251207-go-pkg-cfgm?sort=semver)](https://github.com/lwmacct/251207-go-pkg-cfgm/tags)
 
 通用的 Go 配置加载库，支持泛型，可被外部项目复用。
+
+<!--TOC-->
+
+## Table of Contents
+
+- [特性](#特性) `:31+10`
+- [安装](#安装) `:41+6`
+- [快速开始](#快速开始) `:47+188`
+  - [1. 定义配置结构体](#1-定义配置结构体) `:49+34`
+  - [2. 加载配置](#2-加载配置) `:83+35`
+  - [3. 环境变量](#3-环境变量) `:118+54`
+  - [4. 测试驱动的配置管理](#4-测试驱动的配置管理) `:172+63`
+- [模板语法](#模板语法) `:235+52`
+  - [基本语法](#基本语法) `:243+10`
+  - [内置函数](#内置函数) `:253+21`
+  - [使用示例](#使用示例) `:274+13`
+- [License](#license) `:287+3`
+
+<!--TOC-->
 
 ## 特性
 
