@@ -6,10 +6,8 @@
 
 Schema 驱动的 Go 配置库。一个 `Manager[T]` 同时负责默认值、文件、环境变量、urfave/cli 命令树装配、严格校验和示例配置，避免应用手写 flags 后再靠反射猜测映射关系。
 
-> 当前 API 是破坏式 vNext，不兼容旧的包级 `Load`、`Loader`、`Command`、`CLI` 和手工 flag coverage API。
->
 > 当前版本要求 Go 1.27，配置解码基于 `encoding/json/v2`：字段名大小写敏感，拒绝重复 JSON key 和非法 UTF-8，也不会把数字、布尔值等弱转换成字符串。
-> `time.Duration` 在所有文本来源中统一使用字符串（例如 `"30s"`），不接受旧式纳秒数字。
+> `time.Duration` 在所有文本来源中统一使用字符串（例如 `"30s"`）。
 
 ## 安装
 
@@ -21,17 +19,11 @@ go get github.com/lwmacct/251207-go-pkg-cfgm/pkg/cfgm
 
 完整索引和可复制命令见 [`examples/README.md`](examples/README.md)：
 
-| 示例 | 能力 |
+| 示例 | 场景 |
 | --- | --- |
-| [`basic`](examples/basic) | 默认值、文件、环境变量 |
-| [`cli`](examples/cli) | 自动装配 CLI 命令树和 typed action |
-| [`precedence`](examples/precedence) | 来源优先级和 `LoadReport` |
-| [`composite`](examples/composite) | slice、struct slice 和 JSON flags |
-| [`codec`](examples/codec) | 自定义叶子类型 codec |
-| [`validation`](examples/validation) | 严格校验与允许额外字段 |
-| [`templates`](examples/templates) | `${...}` 与模板策略 |
-| [`config-files`](examples/config-files) | 示例配置生成与运行配置校验 |
-| [`custom-source`](examples/custom-source) | 自定义配置来源 |
+| [`cli`](examples/cli) | 完整 CLI 应用：自动 flags、优先级、集合、codec、模板和报告 |
+| [`config`](examples/config) | 非 CLI 加载、示例配置生成和严格校验 |
+| [`custom-source`](examples/custom-source) | 自定义 `Source` 与 `Schema` |
 
 ## 定义配置
 

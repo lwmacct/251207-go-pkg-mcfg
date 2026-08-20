@@ -1,132 +1,69 @@
 # cfgm examples
 
-所有命令均从仓库根目录执行。每个目录只展示一个主要能力，便于复制到实际项目。
+所有命令均从仓库根目录执行。示例按真实使用场景组织，每个目录可以独立运行和阅读。
 
-| 示例 | 主题 |
-| --- | --- |
-| [`basic`](basic) | 默认值、配置文件和环境变量 |
-| [`cli`](cli) | 自动装配 CLI flags、alias、隐藏字段和 typed action |
-| [`precedence`](precedence) | defaults → file → env → CLI 优先级和 `LoadReport` |
-| [`composite`](composite) | 标量 slice、`[]struct`、JSON object flags 和显式清空 |
-| [`codec`](codec) | 文件、环境变量和 CLI 共用自定义 codec |
-| [`validation`](validation) | 严格未知字段校验、`AllowUnknownKeys` 和已知字段类型校验 |
-| [`templates`](templates) | `${...}`、最终值插值和全局模板策略 |
-| [`config-files`](config-files) | 生成 example YAML 并用同一 `Manager` 校验运行配置 |
-| [`custom-source`](custom-source) | 实现自定义 `Source` 并读取 `Schema` |
+| 示例 | 场景 | 覆盖能力 |
+| --- | --- | --- |
+| [`cli`](cli) | CLI 服务应用 | 自动 flags、来源优先级、`LoadReport`、集合、codec、模板 |
+| [`config`](config) | 非 CLI 配置生命周期 | 默认值、文件、环境变量、示例生成、严格校验 |
+| [`custom-source`](custom-source) | 扩展配置来源 | 实现 `Source`、读取 `Schema`、来源报告 |
 
-## Basic
+## CLI 应用
 
-配置文件先覆盖默认值，随后 `APP_` 环境变量覆盖配置文件：
+[`cli`](cli) 是主要示例。一条命令同时展示默认值、文件、环境变量和 CLI 的覆盖顺序：
 
 ```bash
-APP_ENDPOINT=https://localhost:8443 APP_TIMEOUT=5s \
-  go run ./examples/basic
-```
-
-## CLI
-
-`Manager.MustConfigure()` 遍历命令树，生成根 `--config/-c`、`--env-prefix/-e` 和各命令的配置 flags：
-
-```bash
-go run ./examples/cli server \
-  --addr=:9090 \
-  --timeout=10s \
-  --redis.url=redis://localhost:6379/1
-```
-
-`server.redis.password` 通过 `HideCLI` 排除，不会成为命令行参数。
-
-## Precedence
-
-此命令同时设置 file、env 和 CLI；最终 `addr` 来自 CLI，`timeout` 来自 file：
-
-```bash
-PRECEDENCE_SERVER_ADDR=:9000 \
-  go run ./examples/precedence \
-  --config examples/precedence/config.yaml \
-  server --addr=:10000
-```
-
-程序会打印最终值，以及 `LoadReport` 记录的每个来源和 key。
-
-## Composite
-
-重复的 JSON object flag 构成一个新的证书列表，并整体替换文件中的列表：
-
-```bash
-go run ./examples/composite \
-  --config examples/composite/config.yaml \
+REDIS_URL=redis://localhost:6379/2 \
+REDISCLI_AUTH=secret \
+CFGM_EXAMPLE_SERVER_ADDR=:9000 \
+  go run ./examples/cli \
+  --config examples/cli/config.yaml \
   server \
+  --addr=:10000 \
+  --timeout=10s \
   --tags=api --tags=edge \
-  --certificates='{"id":"main","certificate":"file:///main.crt","private-key":"file:///main.key"}' \
-  --certificates='{"id":"api","certificate":"file:///api.crt","private-key":"file:///api.key"}'
+  --upstream=svc://cli \
+  --certificates='{"id":"main","certificate":"file:///main.crt","private-key":"file:///main.key"}'
 ```
 
-使用 `[]` 显式清空证书：
+最终 `addr` 来自 CLI；输出还会列出每个配置来源及其贡献的 key。示例同时体现：
+
+- `CLIAlias("server.addr", "a")` 添加 `--addr/-a`；
+- `HideCLI("server.redis.password")` 让密码只能来自文件或环境变量；
+- 标量 slice 使用重复 flag，`[]struct` 使用 JSON object flag；
+- `--certificates=[]` 可以显式清空集合；
+- `upstream` 是 struct，通过 codec 在所有来源中表现为 `svc://host` 字符串；
+- 配置文件中的 `${VAR:-fallback}` 在所有来源合并后展开。
+
+环境变量中的集合使用完整 JSON：
 
 ```bash
-go run ./examples/composite \
-  --config examples/composite/config.yaml \
-  server --certificates=[]
+CFGM_EXAMPLE_SERVER_TAGS='["env","json"]' \
+  go run ./examples/cli server
 ```
 
-环境变量中的 slice 必须是完整 JSON：
+## 配置文件生命周期
+
+[`config`](config) 展示不使用 CLI 时的常规加载：
 
 ```bash
-COMPOSITE_SERVER_TAGS='["env","json"]' \
-  go run ./examples/composite server
+APP_NAME=from-env SERVICE_TOKEN=secret \
+  go run ./examples/config
 ```
 
-## Codec
+优先级为默认值 → [`config.yaml`](config/config.yaml) → `APP_` 环境变量。配置文件中的服务地址和令牌支持 `${...}` 模板。
 
-`endpoint` 是自定义 struct，但文件、环境变量和 CLI 都将其视作一个字符串叶子值：
+生成 [`config.example.yaml`](config/config.example.yaml)、校验运行配置，并验证严格/宽松未知字段策略：
 
 ```bash
-go run ./examples/codec --config examples/codec/config.yaml
-CODEC_ENDPOINT=svc://env go run ./examples/codec
-go run ./examples/codec --endpoint=svc://cli
+go test -v ./examples/config
 ```
 
-`http://invalid` 会被 codec 拒绝。
+生成与校验使用同一个 `Manager`，不会维护第二套 Schema。
 
-## Validation
+## 自定义来源
 
-示例依次展示严格未知字段错误、允许额外字段，以及即使允许额外字段仍会执行的已知字段类型校验：
-
-```bash
-go run ./examples/validation
-```
-
-## Templates
-
-配置文件使用 Redis URL/password 展示只读的 `${VAR}` 和 `${VAR:-fallback}`。文件先完成 YAML 解析，再展开字符串值，因此变量不会改变配置结构：
-
-```bash
-REDIS_URL=redis://localhost:6379/1 REDISCLI_AUTH=secret \
-  go run ./examples/templates
-```
-
-所有来源合并后只展开最终生效的字符串值；需要保留字面量 `${VAR}` 时使用 `$${VAR}`，也可用 `WithoutTemplateExpansion()` 全局关闭展开。
-
-## Config Files
-
-运行配置：
-
-```bash
-go run ./examples/config-files
-```
-
-生成 [`config.example.yaml`](config-files/config.example.yaml) 并校验 [`config.yaml`](config-files/config.yaml)：
-
-```bash
-go test -v ./examples/config-files
-```
-
-生成与校验使用同一个 `Manager`，不会产生第二套 Schema。
-
-## Custom Source
-
-内存 Source 使用 `Schema.Has` 检查目标配置，并通过 `LoadReport` 暴露来源信息：
+[`custom-source`](custom-source) 实现内存 `Source`，使用 `Schema.Has` 检查目标配置，并通过 `LoadReport` 暴露来源信息：
 
 ```bash
 go run ./examples/custom-source

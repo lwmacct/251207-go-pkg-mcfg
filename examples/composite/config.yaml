@@ -1,7 +1,0 @@
-server:
-  tags:
-    - file
-  certificates:
-    - id: file
-      certificate: file:///file.crt
-      private-key: file:///file.key

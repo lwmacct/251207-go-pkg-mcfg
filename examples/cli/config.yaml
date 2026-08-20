@@ -1,0 +1,13 @@
+server:
+  addr: ":8000"
+  timeout: 20s
+  tags:
+    - file
+  certificates:
+    - id: file
+      certificate: file:///file.crt
+      private-key: file:///file.key
+  upstream: svc://file
+  redis:
+    url: "${REDIS_URL:-redis://localhost:6379/1}"
+    password: "${REDISCLI_AUTH}"

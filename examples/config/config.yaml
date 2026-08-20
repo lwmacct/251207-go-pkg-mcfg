@@ -1,0 +1,5 @@
+name: runtime
+timeout: 10s
+service:
+  url: "${SERVICE_URL:-https://api.example.com/v1}"
+  token: "${SERVICE_TOKEN:-development}"
