@@ -2,12 +2,11 @@ package cfgm
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"fmt"
-	"io"
 	"os"
 	"reflect"
+	"strconv"
 	"strings"
 )
 
@@ -143,14 +142,10 @@ func (s Schema) parseEnvValue(field Field, raw string) (any, error) {
 	}
 	typ := field.Type
 	if typ.Kind() != reflect.Slice && typ.Kind() != reflect.Map {
-		return raw, nil
+		return parseEnvScalar(field.Path, typ, raw)
 	}
 	var value any
-	decoder := json.NewDecoder(strings.NewReader(raw))
-	if err := decoder.Decode(&value); err != nil {
-		return nil, fmt.Errorf("parse %s as JSON %s: %w", field.Path, typ, err)
-	}
-	if err := ensureEnvJSONEOF(decoder); err != nil {
+	if err := decodeJSONDocument([]byte(raw), &value); err != nil {
 		return nil, fmt.Errorf("parse %s as JSON %s: %w", field.Path, typ, err)
 	}
 	if typ.Kind() == reflect.Slice {
@@ -163,16 +158,44 @@ func (s Schema) parseEnvValue(field Field, raw string) (any, error) {
 	return value, nil
 }
 
-func ensureEnvJSONEOF(decoder *json.Decoder) error {
-	var trailing any
-	err := decoder.Decode(&trailing)
-	if errors.Is(err, io.EOF) {
-		return nil
+func parseEnvScalar(path string, typ reflect.Type, raw string) (any, error) {
+	switch typ.Kind() { //nolint:exhaustive // unsupported scalar kinds remain strings
+	case reflect.Bool:
+		value, err := strconv.ParseBool(raw)
+		if err != nil {
+			return nil, fmt.Errorf("parse %s as %s: %w", path, typ, err)
+		}
+		return value, nil
+	case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64:
+		if typ == durationType {
+			return raw, nil
+		}
+		value, err := strconv.ParseInt(raw, 10, typ.Bits())
+		if err != nil {
+			return nil, fmt.Errorf("parse %s as %s: %w", path, typ, err)
+		}
+		out := reflect.New(typ).Elem()
+		out.SetInt(value)
+		return out.Interface(), nil
+	case reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64, reflect.Uintptr:
+		value, err := strconv.ParseUint(raw, 10, typ.Bits())
+		if err != nil {
+			return nil, fmt.Errorf("parse %s as %s: %w", path, typ, err)
+		}
+		out := reflect.New(typ).Elem()
+		out.SetUint(value)
+		return out.Interface(), nil
+	case reflect.Float32, reflect.Float64:
+		value, err := strconv.ParseFloat(raw, typ.Bits())
+		if err != nil {
+			return nil, fmt.Errorf("parse %s as %s: %w", path, typ, err)
+		}
+		out := reflect.New(typ).Elem()
+		out.SetFloat(value)
+		return out.Interface(), nil
+	default:
+		return raw, nil
 	}
-	if err != nil {
-		return err
-	}
-	return errors.New("must contain exactly one JSON value")
 }
 
 func envName(path string) string {

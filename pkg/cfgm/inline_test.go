@@ -25,12 +25,10 @@ type InlineConfig struct {
 
 func inlineDefaults() InlineConfig {
 	return InlineConfig{
-		Enabled: true,
-		InlineReloadConfig: InlineReloadConfig{
-			Certificates:       []bindingTLSCertificate{{ID: "default", Certificate: "cert.pem", PrivateKey: "key.pem"}},
-			DefaultCertificate: "default",
-			PollInterval:       time.Minute,
-		},
+		Enabled:            true,
+		Certificates:       []bindingTLSCertificate{{ID: "default", Certificate: "cert.pem", PrivateKey: "key.pem"}},
+		DefaultCertificate: "default",
+		PollInterval:       time.Minute,
 	}
 }
 
@@ -124,7 +122,8 @@ func TestManagerValidatesInlineFieldsInsideStructSlices(t *testing.T) {
 
 	path = writeTempConfig(t, "items:\n  - enabled: true\n    typo: invalid\n")
 	_, err = manager.Load(t.Context(), File(path))
-	require.ErrorContains(t, err, "items.typo")
+	require.ErrorContains(t, err, `unknown object member name "typo"`)
+	require.ErrorContains(t, err, `/items/0`)
 
 	var loaded *Config
 	root := configuredRoot(t, manager, func(_ context.Context, _ *cli.Command, cfg *Config) error {
@@ -205,7 +204,10 @@ func TestManagerRejectsInvalidInlineFields(t *testing.T) {
 			Base `cfgm:",inline"`
 		}
 		assert.PanicsWithError(t, "cfgm: inline config type cfgm.Base cannot use a codec", func() {
-			New(Config{}, WithCodec(Codec[Base]{Parse: func(string) (Base, error) { return Base{}, nil }}))
+			New(Config{}, WithCodec(Codec[Base]{
+				Parse:  func(string) (Base, error) { return Base{}, nil },
+				Format: func(Base) string { return "" },
+			}))
 		})
 	})
 

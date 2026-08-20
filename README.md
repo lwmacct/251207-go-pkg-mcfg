@@ -7,6 +7,9 @@
 Schema 驱动的 Go 配置库。一个 `Manager[T]` 同时负责默认值、文件、环境变量、urfave/cli 命令树装配、严格校验和示例配置，避免应用手写 flags 后再靠反射猜测映射关系。
 
 > 当前 API 是破坏式 vNext，不兼容旧的包级 `Load`、`Loader`、`Command`、`CLI` 和手工 flag coverage API。
+>
+> 当前版本要求 Go 1.27，配置解码基于 `encoding/json/v2`：字段名大小写敏感，拒绝重复 JSON key 和非法 UTF-8，也不会把数字、布尔值等弱转换成字符串。
+> `time.Duration` 在所有文本来源中统一使用字符串（例如 `"30s"`），不接受旧式纳秒数字。
 
 ## 安装
 
@@ -77,7 +80,7 @@ config, err := Manager.Load(ctx,
 
 来源按声明顺序合并，后面的来源覆盖前面的来源。除非使用 `WithoutDefaultPaths()`，`Manager` 会先搜索 `DefaultPaths(appName)`；启动阶段也可使用 `MustLoad`，诊断时使用 `LoadReport`。
 
-默认严格拒绝未知字段，并递归校验 struct、struct slice 和 map 中的已知结构。`AllowUnknownKeys()` 只允许额外字段，不会关闭已知字段的形状校验。
+默认严格拒绝未知字段，并递归校验 struct、struct slice 和 map 中的已知结构。错误路径使用 JSON Pointer（例如 `/routes/0/backends/0`），可直接定位集合中的具体元素。`AllowUnknownKeys()` 只允许额外字段，不会关闭已知字段的类型校验。
 
 ## CLI 集成
 
@@ -146,7 +149,7 @@ manager := cfgm.New(defaults, cfgm.WithCodec(cfgm.Codec[Endpoint]{
 }))
 ```
 
-同一 codec 适用于文件、环境变量和 CLI。`Parse` 必填，`Format` 只负责生成 CLI 默认值文本。
+同一 codec 适用于默认值、文件、环境变量和 CLI。`Parse` 与 `Format` 都必填，并且必须可逆：`Parse(Format(value))` 应还原等价值；这样 struct 等自定义叶子类型即使出现在 slice/map 默认值内部，也能安全穿过统一的配置合并管线。
 
 ## 模板与文件
 

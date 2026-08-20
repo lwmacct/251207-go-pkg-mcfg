@@ -6,6 +6,7 @@ import (
 	"log/slog"
 	"os"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -101,6 +102,95 @@ func TestManagerSearchesDefaultPaths(t *testing.T) {
 	}
 }
 
+func TestJSONFilesUseStrictGo127Semantics(t *testing.T) {
+	type Config struct {
+		Name  string `json:"name"`
+		Count uint64 `json:"count"`
+	}
+	manager := New(Config{}, WithoutDefaultPaths())
+
+	writeJSON := func(t *testing.T, content []byte) string {
+		t.Helper()
+		path := t.TempDir() + "/config.json"
+		require.NoError(t, os.WriteFile(path, content, 0o600))
+		return path
+	}
+
+	t.Run("preserves large integers", func(t *testing.T) {
+		path := writeJSON(t, []byte(`{"name":"app","count":18446744073709551615}`))
+		cfg, err := manager.Load(t.Context(), File(path))
+		require.NoError(t, err)
+		assert.Equal(t, uint64(18446744073709551615), cfg.Count)
+	})
+
+	t.Run("rejects duplicate names", func(t *testing.T) {
+		path := writeJSON(t, []byte(`{"name":"first","name":"second"}`))
+		_, err := manager.Load(t.Context(), File(path))
+		require.ErrorContains(t, err, `duplicate object member name "name"`)
+	})
+
+	t.Run("matches field names exactly", func(t *testing.T) {
+		path := writeJSON(t, []byte(`{"Name":"wrong-case"}`))
+		_, err := manager.Load(t.Context(), File(path))
+		require.ErrorContains(t, err, `unknown object member name "Name"`)
+	})
+
+	t.Run("rejects invalid UTF-8", func(t *testing.T) {
+		path := writeJSON(t, []byte{'{', '"', 'n', 'a', 'm', 'e', '"', ':', '"', 0xff, '"', '}'})
+		_, err := manager.Load(t.Context(), File(path))
+		require.ErrorContains(t, err, "invalid UTF-8")
+	})
+}
+
+func TestDurationJSONUsesStringRepresentation(t *testing.T) {
+	type Config struct {
+		Timeout time.Duration `json:"timeout"`
+	}
+	manager := New(Config{}, WithoutDefaultPaths())
+
+	path := t.TempDir() + "/config.json"
+	require.NoError(t, os.WriteFile(path, []byte(`{"timeout":"30s"}`), 0o600))
+	cfg, err := manager.Load(t.Context(), File(path))
+	require.NoError(t, err)
+	assert.Equal(t, 30*time.Second, cfg.Timeout)
+
+	require.NoError(t, os.WriteFile(path, []byte(`{"timeout":30000000000}`), 0o600))
+	_, err = manager.Load(t.Context(), File(path))
+	require.ErrorContains(t, err, "time.Duration")
+
+	jsonData := MarshalJSON(Config{Timeout: 30 * time.Second})
+	assert.JSONEq(t, `{"timeout":"30s"}`, string(jsonData))
+}
+
+func TestCompositeEnvironmentJSONUsesStrictGo127Semantics(t *testing.T) {
+	type Config struct {
+		Labels map[string]string `json:"labels"`
+	}
+	t.Setenv("APP_LABELS", `{"region":"cn","region":"us"}`)
+	_, err := New(Config{}, WithoutDefaultPaths()).Load(t.Context(), Env("APP_"))
+	require.ErrorContains(t, err, `duplicate object member name "region"`)
+}
+
+func TestManagerRejectsWeakScalarConversions(t *testing.T) {
+	type Config struct {
+		Name string `json:"name"`
+	}
+	manager := New(Config{}, WithoutDefaultPaths())
+	path := writeTempConfig(t, "name: 42\n")
+	_, err := manager.Load(t.Context(), File(path))
+	require.ErrorContains(t, err, `Go string`)
+}
+
+func TestManagerRejectsNullForNonNullableFields(t *testing.T) {
+	type Config struct {
+		Name string `json:"name"`
+	}
+	manager := New(Config{}, WithoutDefaultPaths())
+	path := writeTempConfig(t, "name: null\n")
+	_, err := manager.Load(t.Context(), File(path))
+	require.ErrorContains(t, err, "cannot be null")
+}
+
 func TestDefaultPathOrderAndOptions(t *testing.T) {
 	type Config struct {
 		Name string `json:"name"`
@@ -140,7 +230,7 @@ func TestManagerUnknownKeyPolicy(t *testing.T) {
 	path := writeTempConfig(t, "name: app\ntypo: true\n")
 
 	_, err := New(Config{}, WithoutDefaultPaths()).Load(t.Context(), File(path))
-	require.ErrorContains(t, err, "unknown config keys")
+	require.ErrorContains(t, err, "unknown object member")
 	require.ErrorContains(t, err, "typo")
 
 	cfg, err := New(Config{}, WithoutDefaultPaths(), AllowUnknownKeys()).Load(t.Context(), File(path))
@@ -154,7 +244,8 @@ func TestAllowUnknownKeysStillValidatesKnownFieldShapes(t *testing.T) {
 	}
 	path := writeTempConfig(t, "names: wrong\nextra: true\n")
 	_, err := New(Config{}, WithoutDefaultPaths(), AllowUnknownKeys()).Load(t.Context(), File(path))
-	require.ErrorContains(t, err, `config key "names" must be an array`)
+	require.ErrorContains(t, err, `Go []string`)
+	require.ErrorContains(t, err, `/names`)
 }
 
 func TestManagerNullableStructs(t *testing.T) {

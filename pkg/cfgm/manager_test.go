@@ -58,6 +58,17 @@ func bindingDefaults() bindingTestConfig {
 	return cfg
 }
 
+func BenchmarkManagerLoadDefaults(b *testing.B) {
+	manager := New(bindingDefaults(), WithoutDefaultPaths())
+	ctx := context.Background()
+	b.ReportAllocs()
+	for b.Loop() {
+		if _, err := manager.Load(ctx); err != nil {
+			b.Fatal(err)
+		}
+	}
+}
+
 func TestManagerGeneratesTypedFlags(t *testing.T) {
 	manager := New(
 		bindingDefaults(),
@@ -317,7 +328,8 @@ routes:
         typo: true
 `)
 	_, err := New(Config{}, WithoutDefaultPaths()).Load(t.Context(), File(path))
-	require.ErrorContains(t, err, "routes.backends.typo")
+	require.ErrorContains(t, err, `unknown object member name "typo"`)
+	require.ErrorContains(t, err, `/routes/0/backends/0`)
 }
 
 func TestManagerRejectsDeepUnknownStructFlagFields(t *testing.T) {
@@ -325,7 +337,8 @@ func TestManagerRejectsDeepUnknownStructFlagFields(t *testing.T) {
 	_, err := runManager(t, manager,
 		`--routes={"path":"/api","backends":[{"url":"https://api.example.com","typo":true}]}`,
 	)
-	require.ErrorContains(t, err, "backends.typo")
+	require.ErrorContains(t, err, `unknown object member name "typo"`)
+	require.ErrorContains(t, err, `/backends/0`)
 }
 
 func TestManagerCodecAppliesToFileAndEnvironment(t *testing.T) {
@@ -339,6 +352,7 @@ func TestManagerCodecAppliesToFileAndEnvironment(t *testing.T) {
 			}
 			return bindingEndpoint(value), nil
 		},
+		Format: func(value bindingEndpoint) string { return string(value) },
 	}))
 	path := writeTempConfig(t, "endpoint: svc://file\n")
 	cfg, err := manager.Load(t.Context(), File(path))
@@ -356,7 +370,8 @@ func TestManagerCodecAppliesToFileAndEnvironment(t *testing.T) {
 
 	path = writeTempConfig(t, "endpoint: 42\n")
 	_, err = manager.Load(t.Context(), File(path))
-	require.ErrorContains(t, err, "must be a string for codec")
+	require.ErrorContains(t, err, "must be a string")
+	require.ErrorContains(t, err, "bindingEndpoint")
 }
 
 func TestManagerRejectsInvalidOptionsAndSchema(t *testing.T) {
@@ -365,6 +380,9 @@ func TestManagerRejectsInvalidOptionsAndSchema(t *testing.T) {
 	}
 	assert.PanicsWithValue(t, "cfgm: codec for string requires Parse", func() {
 		New(Config{}, WithCodec(Codec[string]{}))
+	})
+	assert.PanicsWithValue(t, "cfgm: codec for string requires Format", func() {
+		New(Config{}, WithCodec(Codec[string]{Parse: func(value string) (string, error) { return value, nil }}))
 	})
 	assert.PanicsWithValue(t, "cfgm: logger must not be nil", func() {
 		New(Config{}, Logger(nil))
@@ -395,6 +413,55 @@ func TestManagerTreatsCodecStructAsLeaf(t *testing.T) {
 	requireFlagType[*cli.StringFlag](t, root.Flags, "endpoint")
 }
 
+func TestManagerPreservesDefaultCodecValues(t *testing.T) {
+	type Endpoint struct {
+		Scheme string
+		Name   string
+	}
+	type Config struct {
+		Endpoint Endpoint `json:"endpoint"`
+	}
+	manager := New(Config{Endpoint: Endpoint{Scheme: "svc", Name: "default"}},
+		WithoutDefaultPaths(),
+		WithCodec(Codec[Endpoint]{
+			Parse: func(value string) (Endpoint, error) {
+				parts := strings.SplitN(value, "://", 2)
+				if len(parts) != 2 {
+					return Endpoint{}, errors.New("invalid endpoint")
+				}
+				return Endpoint{Scheme: parts[0], Name: parts[1]}, nil
+			},
+			Format: func(value Endpoint) string { return value.Scheme + "://" + value.Name },
+		}),
+	)
+	cfg, err := manager.Load(t.Context())
+	require.NoError(t, err)
+	assert.Equal(t, Endpoint{Scheme: "svc", Name: "default"}, cfg.Endpoint)
+}
+
+func TestManagerPreservesDefaultCodecsInsideComposites(t *testing.T) {
+	type Endpoint struct {
+		Name string
+	}
+	type Service struct {
+		Endpoint Endpoint `json:"endpoint"`
+	}
+	type Config struct {
+		Services []Service `json:"services"`
+	}
+	manager := New(Config{Services: []Service{{Endpoint: Endpoint{Name: "default"}}}},
+		WithoutDefaultPaths(),
+		WithCodec(Codec[Endpoint]{
+			Parse:  func(value string) (Endpoint, error) { return Endpoint{Name: value}, nil },
+			Format: func(value Endpoint) string { return value.Name },
+		}),
+	)
+	cfg, err := manager.Load(t.Context())
+	require.NoError(t, err)
+	require.Len(t, cfg.Services, 1)
+	assert.Equal(t, "default", cfg.Services[0].Endpoint.Name)
+}
+
 func TestManagerUsesCodecInsideStructSlice(t *testing.T) {
 	type Endpoint struct {
 		Name string
@@ -406,7 +473,8 @@ func TestManagerUsesCodecInsideStructSlice(t *testing.T) {
 		Services []Service `json:"services"`
 	}
 	manager := New(Config{}, WithCodec(Codec[Endpoint]{
-		Parse: func(value string) (Endpoint, error) { return Endpoint{Name: value}, nil },
+		Parse:  func(value string) (Endpoint, error) { return Endpoint{Name: value}, nil },
+		Format: func(value Endpoint) string { return value.Name },
 	}))
 	var loaded *Config
 	cmd := configuredRoot(t, manager, func(_ context.Context, _ *cli.Command, cfg *Config) error {

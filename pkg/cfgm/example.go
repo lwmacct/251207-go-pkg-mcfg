@@ -2,7 +2,8 @@ package cfgm
 
 import (
 	"bytes"
-	"encoding/json"
+	"encoding/json/jsontext"
+	"encoding/json/v2"
 	"errors"
 	"fmt"
 	"os"
@@ -71,12 +72,15 @@ func MarshalYAML[T any](cfg T) []byte {
 //	jsonBytes := cfgm.MarshalJSON(cfg)
 //	os.WriteFile("config/config.json", jsonBytes, 0644)
 func MarshalJSON[T any](cfg T) []byte {
-	var buf bytes.Buffer
-	enc := json.NewEncoder(&buf)
-	enc.SetIndent("", "  ")
-	_ = enc.Encode(cfg) //nolint:errchkjson // T is a config struct, safe to encode
-
-	return buf.Bytes()
+	data, err := json.Marshal(cfg, json.WithMarshalers(durationMarshaler()))
+	if err != nil {
+		return nil
+	}
+	value := jsontext.Value(data)
+	if err := value.Indent(jsontext.WithIndent("  ")); err != nil {
+		return nil
+	}
+	return append(value, '\n')
 }
 
 // InitConfigFile 将默认配置写入运行配置文件。

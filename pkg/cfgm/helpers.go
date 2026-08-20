@@ -1,7 +1,8 @@
 package cfgm
 
 import (
-	"encoding/json"
+	"encoding/json/jsontext"
+	"encoding/json/v2"
 	"errors"
 	"fmt"
 	"path/filepath"
@@ -110,11 +111,15 @@ func isMapType(typ reflect.Type) bool {
 }
 
 func structToMap(cfg any) map[string]any {
-	val := reflect.ValueOf(cfg)
-	return structValueToMap(val, val.Type())
+	return structToMapWithCodecs(cfg, nil)
 }
 
-func structValueToMap(val reflect.Value, typ reflect.Type) map[string]any {
+func structToMapWithCodecs(cfg any, codecs map[reflect.Type]valueCodec) map[string]any {
+	val := reflect.ValueOf(cfg)
+	return structValueToMap(val, val.Type(), codecs)
+}
+
+func structValueToMap(val reflect.Value, typ reflect.Type, codecs map[reflect.Type]valueCodec) map[string]any {
 	if val.Kind() == reflect.Pointer {
 		if val.IsNil() {
 			return map[string]any{}
@@ -132,13 +137,16 @@ func structValueToMap(val reflect.Value, typ reflect.Type) map[string]any {
 		field := configured.field
 		key := configTagName(field)
 		fieldVal := val.FieldByIndex(configured.index)
-		out[key] = valueToAny(fieldVal, field.Type)
+		out[key] = valueToAny(fieldVal, field.Type, codecs)
 	}
 
 	return out
 }
 
-func valueToAny(val reflect.Value, typ reflect.Type) any {
+func valueToAny(val reflect.Value, typ reflect.Type, codecs map[reflect.Type]valueCodec) any {
+	if codec, ok := codecs[typ]; ok {
+		return codec.format(val.Interface())
+	}
 	if val.Kind() == reflect.Pointer {
 		if val.IsNil() {
 			return nil
@@ -148,7 +156,7 @@ func valueToAny(val reflect.Value, typ reflect.Type) any {
 	}
 
 	if isStructType(typ) {
-		return structValueToMap(val, typ)
+		return structValueToMap(val, typ, codecs)
 	}
 
 	switch val.Kind() {
@@ -159,7 +167,7 @@ func valueToAny(val reflect.Value, typ reflect.Type) any {
 		out := make([]any, val.Len())
 		for i := range val.Len() {
 			elem := val.Index(i)
-			out[i] = valueToAny(elem, elem.Type())
+			out[i] = valueToAny(elem, elem.Type(), codecs)
 		}
 
 		return out
@@ -171,7 +179,7 @@ func valueToAny(val reflect.Value, typ reflect.Type) any {
 		iter := val.MapRange()
 		for iter.Next() {
 			key := fmt.Sprintf("%v", iter.Key().Interface())
-			out[key] = valueToAny(iter.Value(), iter.Value().Type())
+			out[key] = valueToAny(iter.Value(), iter.Value().Type(), codecs)
 		}
 
 		return out
@@ -184,7 +192,7 @@ func parseConfigBytes(path string, content []byte) (map[string]any, error) {
 	var raw any
 	var err error
 	if isJSONPath(path) {
-		err = json.Unmarshal(content, &raw)
+		err = decodeJSONDocument(content, &raw)
 	} else {
 		err = yamlv3.Unmarshal(content, &raw)
 	}
@@ -202,6 +210,16 @@ func parseConfigBytes(path string, content []byte) (map[string]any, error) {
 	}
 
 	return configMap, nil
+}
+
+func decodeJSONDocument(data []byte, out any) error {
+	numbers := json.UnmarshalFromFunc(func(decoder *jsontext.Decoder, value *any) error {
+		if decoder.PeekKind() == '0' {
+			*value = jsontext.Value(nil)
+		}
+		return errors.ErrUnsupported
+	})
+	return json.Unmarshal(data, out, json.WithUnmarshalers(numbers))
 }
 
 func isJSONPath(path string) bool {

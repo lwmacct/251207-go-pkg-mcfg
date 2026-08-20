@@ -2,10 +2,10 @@ package cfgm
 
 import (
 	"context"
-	"encoding/json"
+	"encoding/json/jsontext"
+	"encoding/json/v2"
 	"errors"
 	"fmt"
-	"io"
 	"log/slog"
 	"maps"
 	"reflect"
@@ -13,7 +13,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/go-viper/mapstructure/v2"
 	"github.com/urfave/cli/v3"
 )
 
@@ -81,6 +80,9 @@ func WithCodec[T any](codec Codec[T]) Option {
 	if codec.Parse == nil {
 		panic(fmt.Sprintf("cfgm: codec for %s requires Parse", reflect.TypeFor[T]()))
 	}
+	if codec.Format == nil {
+		panic(fmt.Sprintf("cfgm: codec for %s requires Format", reflect.TypeFor[T]()))
+	}
 	return managerOptionFunc(func(options *managerOptions) {
 		if options.codecs == nil {
 			options.codecs = make(map[reflect.Type]valueCodec)
@@ -89,12 +91,9 @@ func WithCodec[T any](codec Codec[T]) Option {
 		options.codecs[typ] = valueCodec{
 			parse: func(value string) (any, error) { return codec.Parse(value) },
 			format: func(value any) string {
-				if codec.Format == nil {
-					return fmt.Sprint(value)
-				}
 				typed, ok := value.(T)
 				if !ok {
-					return fmt.Sprint(value)
+					panic(fmt.Errorf("cfgm: codec value has type %T, want %s", value, typ))
 				}
 				return codec.Format(typed)
 			},
@@ -167,13 +166,13 @@ func New[T any](defaults T, opts ...Option) *Manager[T] {
 		defaults:          defaults,
 		appName:           options.appName,
 		schema:            buildSchemaModel(reflect.TypeFor[T](), options.codecs),
-		codecs:            mapsClone(options.codecs),
+		codecs:            maps.Clone(options.codecs),
 		defaultPaths:      options.defaultPaths,
 		expandTemplates:   options.expandTemplates,
 		strictUnknownKeys: !options.allowUnknownKeys,
 		logger:            options.logger,
 		aliases:           mapsCloneSlices(options.aliases),
-		noCLI:             mapsClone(options.noCLI),
+		noCLI:             maps.Clone(options.noCLI),
 		bindings:          make(map[string]*commandBinding[T]),
 		commands:          make(map[*cli.Command]*commandBinding[T]),
 	}
@@ -573,7 +572,7 @@ func (b *commandBinding[T]) newFlag(bound boundField) (cli.Flag, error) {
 func (b *commandBinding[T]) newStructSliceFlag(bound boundField, defaultValue reflect.Value) cli.Flag {
 	defaultText := "[]"
 	if defaultValue.IsValid() {
-		encoded, err := json.Marshal(defaultValue.Interface())
+		encoded, err := marshalConfigJSON(defaultValue.Interface())
 		if err == nil {
 			defaultText = string(encoded)
 		}
@@ -891,91 +890,12 @@ func (m *schemaModel) validateData(
 	codecs map[reflect.Type]valueCodec,
 	allowUnknownKeys bool,
 ) error {
-	var unknown []string
-	if err := validateConfigValue(data, m.rootType, "", false, codecs, &unknown); err != nil {
+	encoded, err := marshalConfigJSON(data)
+	if err != nil {
 		return err
 	}
-	if allowUnknownKeys || len(unknown) == 0 {
-		return nil
-	}
-	slices.Sort(unknown)
-	return fmt.Errorf("unknown config keys:\n  - %s", strings.Join(unknown, "\n  - "))
-}
-
-func validateConfigValue(
-	value any,
-	typ reflect.Type,
-	path string,
-	nullable bool,
-	codecs map[reflect.Type]valueCodec,
-	unknown *[]string,
-) error {
-	if typ.Kind() == reflect.Pointer {
-		if value == nil {
-			return nil
-		}
-		return validateConfigValue(value, typ.Elem(), path, true, codecs, unknown)
-	}
-	if value == nil {
-		if nullable || typ.Kind() == reflect.Slice || typ.Kind() == reflect.Map {
-			return nil
-		}
-		return fmt.Errorf("config key %q cannot be null", path)
-	}
-	if _, ok := codecs[typ]; ok {
-		if _, stringValue := value.(string); !stringValue {
-			return fmt.Errorf("config key %q must be a string for codec %s", path, typ)
-		}
-		return nil
-	}
-	if typ == durationType || typ == timeType {
-		return nil
-	}
-	switch typ.Kind() { //nolint:exhaustive // scalar values need no structural validation
-	case reflect.Struct:
-		object, ok := value.(map[string]any)
-		if !ok {
-			return fmt.Errorf("config key %q must be an object", path)
-		}
-		configuredFields, _ := configFields(typ)
-		fields := make(map[string]reflect.Type, len(configuredFields))
-		for _, configured := range configuredFields {
-			field := configured.field
-			fields[configTagName(field)] = field.Type
-		}
-		for key, child := range object {
-			childPath := joinSchemaPath(path, key)
-			fieldType, ok := fields[key]
-			if !ok {
-				*unknown = append(*unknown, childPath)
-				continue
-			}
-			if err := validateConfigValue(child, fieldType, childPath, false, codecs, unknown); err != nil {
-				return err
-			}
-		}
-	case reflect.Slice, reflect.Array:
-		items, ok := value.([]any)
-		if !ok {
-			return fmt.Errorf("config key %q must be an array", path)
-		}
-		for _, item := range items {
-			if err := validateConfigValue(item, typ.Elem(), path, false, codecs, unknown); err != nil {
-				return err
-			}
-		}
-	case reflect.Map:
-		object, ok := value.(map[string]any)
-		if !ok {
-			return fmt.Errorf("config key %q must be an object", path)
-		}
-		for key, child := range object {
-			if err := validateConfigValue(child, typ.Elem(), joinSchemaPath(path, key), false, codecs, unknown); err != nil {
-				return err
-			}
-		}
-	}
-	return nil
+	output := reflect.New(m.rootType).Interface()
+	return decodeConfigJSON(encoded, output, codecs, !allowUnknownKeys)
 }
 
 func (m *schemaModel) hasPath(path string) bool {
@@ -1028,21 +948,17 @@ func (v *structSliceValue) Set(raw string) error {
 		return errors.New("structured values cannot be combined with clear value []")
 	}
 	var item map[string]any
-	decoder := json.NewDecoder(strings.NewReader(raw))
 	targetType := v.typ.Elem()
 	if targetType.Kind() == reflect.Pointer {
 		targetType = targetType.Elem()
 	}
-	if err := decoder.Decode(&item); err != nil {
+	if err := decodeJSONDocument([]byte(raw), &item); err != nil {
 		return fmt.Errorf("parse JSON object: %w", err)
 	}
 	if item == nil {
 		return errors.New("value must be a JSON object")
 	}
-	if err := ensureJSONEOF(decoder); err != nil {
-		return err
-	}
-	if err := validateJSONObject(item, targetType, "", v.codecs); err != nil {
+	if err := validateJSONObject(item, targetType, v.codecs); err != nil {
 		return err
 	}
 	v.items = append(v.items, item)
@@ -1087,7 +1003,7 @@ func (l *configLoader[T]) load(ctx context.Context) (*T, *Report, error) {
 	if ctx == nil {
 		return nil, nil, errors.New("cfgm: nil context")
 	}
-	configMap := structToMap(l.defaults)
+	configMap := structToMapWithCodecs(l.defaults, l.codecs)
 	lookup := environmentSnapshot()
 	report := &Report{}
 	for _, source := range l.sources {
@@ -1123,32 +1039,88 @@ func (l *configLoader[T]) load(ctx context.Context) (*T, *Report, error) {
 }
 
 func decodeConfigMapWithCodecs(data map[string]any, out any, codecs map[reflect.Type]valueCodec) error {
-	hooks := []mapstructure.DecodeHookFunc{
-		func(from reflect.Type, to reflect.Type, value any) (any, error) {
-			codec, ok := codecs[to]
-			if !ok || from == nil || from.Kind() != reflect.String {
-				return value, nil
-			}
-			text, ok := value.(string)
-			if !ok {
-				return value, nil
-			}
-			return codec.parse(text)
-		},
-		mapstructure.StringToTimeDurationHookFunc(),
-		mapstructure.TextUnmarshallerHookFunc(),
-	}
-	decoder, err := mapstructure.NewDecoder(&mapstructure.DecoderConfig{
-		DecodeHook:       mapstructure.ComposeDecodeHookFunc(hooks...),
-		Result:           out,
-		WeaklyTypedInput: true,
-		TagName:          "cfgm,json",
-		SquashTagOption:  "inline",
-	})
+	encoded, err := marshalConfigJSON(data)
 	if err != nil {
 		return err
 	}
-	return decoder.Decode(data)
+	return decodeConfigJSON(encoded, out, codecs, false)
+}
+
+func decodeConfigJSON(data []byte, out any, codecs map[reflect.Type]valueCodec, rejectUnknown bool) error {
+	opts := []json.Options{json.MatchCaseInsensitiveNames(false)}
+	if rejectUnknown {
+		opts = append(opts, json.RejectUnknownMembers(true))
+	}
+	opts = append(opts, json.WithUnmarshalers(configUnmarshalers(codecs)))
+	return json.Unmarshal(data, out, opts...)
+}
+
+// configUnmarshalers bridges the runtime-configured codec registry to the
+// generic json/v2 unmarshaler. The interface target is intentionally broad:
+// json/v2 supplies a pointer to each concrete value, allowing one function to
+// dispatch only the configured leaf types and defer all others to defaults.
+func configUnmarshalers(codecs map[reflect.Type]valueCodec) *json.Unmarshalers {
+	return json.UnmarshalFromFunc(func(decoder *jsontext.Decoder, value any) error {
+		pointer := reflect.ValueOf(value)
+		if !pointer.IsValid() || pointer.Kind() != reflect.Pointer || pointer.IsNil() {
+			return errors.ErrUnsupported
+		}
+		typ := pointer.Type().Elem()
+		if decoder.PeekKind() == 'n' && typ.Kind() != reflect.Pointer && typ.Kind() != reflect.Slice &&
+			typ.Kind() != reflect.Map && typ.Kind() != reflect.Interface {
+			return fmt.Errorf("config value for %s cannot be null", typ)
+		}
+		codec, ok := codecs[typ]
+		if !ok && typ != durationType {
+			return errors.ErrUnsupported
+		}
+		if decoder.PeekKind() != '"' {
+			if typ == durationType {
+				return errors.ErrUnsupported
+			}
+			return fmt.Errorf("config value for %s must be a string", typ)
+		}
+		raw, err := decoder.ReadValue()
+		if err != nil {
+			return err
+		}
+		var text string
+		if err := json.Unmarshal(raw, &text); err != nil {
+			return fmt.Errorf("config value for %s must be a string: %w", typ, err)
+		}
+		var parsed any
+		if typ == durationType {
+			parsed, err = time.ParseDuration(text)
+		} else {
+			parsed, err = codec.parse(text)
+		}
+		if err != nil {
+			return err
+		}
+		converted := reflect.ValueOf(parsed)
+		if !converted.IsValid() {
+			pointer.Elem().Set(reflect.Zero(typ))
+			return nil
+		}
+		if converted.Type() != typ {
+			if !converted.Type().ConvertibleTo(typ) {
+				return fmt.Errorf("codec returned %s, want %s", converted.Type(), typ)
+			}
+			converted = converted.Convert(typ)
+		}
+		pointer.Elem().Set(converted)
+		return nil
+	})
+}
+
+func marshalConfigJSON(value any) ([]byte, error) {
+	return json.Marshal(value, json.WithMarshalers(durationMarshaler()))
+}
+
+func durationMarshaler() *json.Marshalers {
+	return json.MarshalFunc(func(value time.Duration) ([]byte, error) {
+		return json.Marshal(value.String())
+	})
 }
 
 func cleanConfigPath(path string) string {
@@ -1203,33 +1175,16 @@ func valueAtPath(root reflect.Value, index []int) (reflect.Value, bool) {
 	return root, true
 }
 
-func ensureJSONEOF(decoder *json.Decoder) error {
-	var trailing any
-	err := decoder.Decode(&trailing)
-	if errors.Is(err, io.EOF) {
-		return nil
-	}
-	if err != nil {
-		return fmt.Errorf("parse JSON object: %w", err)
-	}
-	return errors.New("JSON object must contain exactly one value")
-}
-
 func validateJSONObject(
 	item map[string]any,
 	typ reflect.Type,
-	prefix string,
 	codecs map[reflect.Type]valueCodec,
 ) error {
-	var unknown []string
-	if err := validateConfigValue(item, typ, prefix, false, codecs, &unknown); err != nil {
+	encoded, err := marshalConfigJSON(item)
+	if err != nil {
 		return err
 	}
-	if len(unknown) > 0 {
-		slices.Sort(unknown)
-		return fmt.Errorf("unknown field %q", unknown[0])
-	}
-	return nil
+	return decodeConfigJSON(encoded, reflect.New(typ).Interface(), codecs, true)
 }
 
 func flattenSchemaKeys(data map[string]any) []string {
@@ -1261,15 +1216,6 @@ func flattenSchemaValue(value any, prefix string, keys *[]string) {
 	default:
 		*keys = append(*keys, prefix)
 	}
-}
-
-func mapsClone[K comparable, V any](source map[K]V) map[K]V {
-	if source == nil {
-		return nil
-	}
-	out := make(map[K]V, len(source))
-	maps.Copy(out, source)
-	return out
 }
 
 func mapsCloneSlices[K comparable, V any](source map[K][]V) map[K][]V {
