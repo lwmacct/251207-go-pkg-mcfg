@@ -9,6 +9,7 @@ import (
 	"log/slog"
 	"maps"
 	"reflect"
+	"runtime"
 	"slices"
 	"strings"
 	"time"
@@ -18,13 +19,13 @@ import (
 
 // Option configures a Manager.
 type Option interface {
-	applyManager(options *managerOptions)
+	applyManager(options *managerOptions) error
 }
 
-type managerOptionFunc func(*managerOptions)
+type managerOptionFunc func(*managerOptions) error
 
-func (f managerOptionFunc) applyManager(options *managerOptions) {
-	f(options)
+func (f managerOptionFunc) applyManager(options *managerOptions) error {
+	return f(options)
 }
 
 type managerOptions struct {
@@ -39,35 +40,40 @@ type managerOptions struct {
 }
 
 func AppName(name string) Option {
-	return managerOptionFunc(func(options *managerOptions) {
+	return managerOptionFunc(func(options *managerOptions) error {
 		options.appName = strings.TrimSpace(name)
+		return nil
 	})
 }
 
 func WithoutDefaultPaths() Option {
-	return managerOptionFunc(func(options *managerOptions) {
+	return managerOptionFunc(func(options *managerOptions) error {
 		options.defaultPaths = false
+		return nil
 	})
 }
 
 func WithoutTemplateExpansion() Option {
-	return managerOptionFunc(func(options *managerOptions) {
+	return managerOptionFunc(func(options *managerOptions) error {
 		options.expandTemplates = false
+		return nil
 	})
 }
 
 func AllowUnknownKeys() Option {
-	return managerOptionFunc(func(options *managerOptions) {
+	return managerOptionFunc(func(options *managerOptions) error {
 		options.allowUnknownKeys = true
+		return nil
 	})
 }
 
 func Logger(logger *slog.Logger) Option {
-	if logger == nil {
-		panic("cfgm: logger must not be nil")
-	}
-	return managerOptionFunc(func(options *managerOptions) {
+	return managerOptionFunc(func(options *managerOptions) error {
+		if logger == nil {
+			return errors.New("cfgm: logger must not be nil")
+		}
 		options.logger = logger
+		return nil
 	})
 }
 
@@ -77,13 +83,13 @@ type Codec[T any] struct {
 }
 
 func WithCodec[T any](codec Codec[T]) Option {
-	if codec.Parse == nil {
-		panic(fmt.Sprintf("cfgm: codec for %s requires Parse", reflect.TypeFor[T]()))
-	}
-	if codec.Format == nil {
-		panic(fmt.Sprintf("cfgm: codec for %s requires Format", reflect.TypeFor[T]()))
-	}
-	return managerOptionFunc(func(options *managerOptions) {
+	return managerOptionFunc(func(options *managerOptions) error {
+		if codec.Parse == nil {
+			return fmt.Errorf("cfgm: codec for %s requires Parse", reflect.TypeFor[T]())
+		}
+		if codec.Format == nil {
+			return fmt.Errorf("cfgm: codec for %s requires Format", reflect.TypeFor[T]())
+		}
 		if options.codecs == nil {
 			options.codecs = make(map[reflect.Type]valueCodec)
 		}
@@ -98,13 +104,14 @@ func WithCodec[T any](codec Codec[T]) Option {
 				return codec.Format(typed)
 			},
 		}
+		return nil
 	})
 }
 
 // HideCLI excludes canonical config field or struct paths from generated CLI
 // flags. Files and environment variables can still configure these paths.
 func HideCLI(paths ...string) Option {
-	return managerOptionFunc(func(options *managerOptions) {
+	return managerOptionFunc(func(options *managerOptions) error {
 		if options.noCLI == nil {
 			options.noCLI = make(map[string]bool)
 		}
@@ -113,12 +120,13 @@ func HideCLI(paths ...string) Option {
 				options.noCLI[path] = true
 			}
 		}
+		return nil
 	})
 }
 
 // CLIAlias adds aliases to one canonical config field path.
 func CLIAlias(path string, aliases ...string) Option {
-	return managerOptionFunc(func(options *managerOptions) {
+	return managerOptionFunc(func(options *managerOptions) error {
 		if options.aliases == nil {
 			options.aliases = make(map[string][]string)
 		}
@@ -128,6 +136,7 @@ func CLIAlias(path string, aliases ...string) Option {
 				options.aliases[path] = append(options.aliases[path], alias)
 			}
 		}
+		return nil
 	})
 }
 
@@ -155,14 +164,22 @@ type Manager[T any] struct {
 }
 
 // New creates a Manager from non-pointer struct defaults.
-func New[T any](defaults T, opts ...Option) *Manager[T] {
+func New[T any](defaults T, opts ...Option) (manager *Manager[T], err error) {
+	defer func() {
+		if recovered := recover(); recovered != nil {
+			manager = nil
+			err = configDefinitionError(recovered)
+		}
+	}()
 	options := managerOptions{defaultPaths: true, expandTemplates: true, logger: slog.Default()}
 	for _, opt := range opts {
 		if opt != nil {
-			opt.applyManager(&options)
+			if err := opt.applyManager(&options); err != nil {
+				return nil, err
+			}
 		}
 	}
-	manager := &Manager[T]{
+	manager = &Manager[T]{
 		defaults:          defaults,
 		appName:           options.appName,
 		schema:            buildSchemaModel(reflect.TypeFor[T](), options.codecs),
@@ -176,8 +193,32 @@ func New[T any](defaults T, opts ...Option) *Manager[T] {
 		bindings:          make(map[string]*commandBinding[T]),
 		commands:          make(map[*cli.Command]*commandBinding[T]),
 	}
-	manager.validateCLIOptions()
+	if err := manager.validateCLIOptions(); err != nil {
+		return nil, err
+	}
+	return manager, nil
+}
+
+// MustNew is New with panic-on-error startup semantics.
+func MustNew[T any](defaults T, opts ...Option) *Manager[T] {
+	manager, err := New(defaults, opts...)
+	if err != nil {
+		panic(err)
+	}
 	return manager
+}
+
+func configDefinitionError(recovered any) error {
+	switch value := recovered.(type) {
+	case runtime.Error:
+		panic(value)
+	case error:
+		return value
+	case string:
+		return errors.New(value)
+	default:
+		panic(recovered)
+	}
 }
 
 // Load applies non-CLI sources after defaults and optional default paths.
@@ -239,30 +280,31 @@ type boundField struct {
 	name  string
 }
 
-func (m *Manager[T]) validateCLIOptions() {
+func (m *Manager[T]) validateCLIOptions() error {
 	for path := range m.noCLI {
 		if !m.schema.isFieldPath(path) && !m.schema.isStructPath(path) {
-			panic(fmt.Errorf("cfgm: hidden CLI path %q does not select config fields", path))
+			return fmt.Errorf("cfgm: hidden CLI path %q does not select config fields", path)
 		}
 	}
 	for path, aliases := range m.aliases {
 		if !m.schema.isFieldPath(path) {
-			panic(fmt.Errorf("cfgm: CLI alias path %q is not a config field", path))
+			return fmt.Errorf("cfgm: CLI alias path %q is not a config field", path)
 		}
 		if bindingExcluded(path, m.noCLI) {
-			panic(fmt.Errorf("cfgm: CLI alias path %q is hidden", path))
+			return fmt.Errorf("cfgm: CLI alias path %q is hidden", path)
 		}
 		seen := make(map[string]bool, len(aliases))
 		for _, alias := range aliases {
 			if isReservedFlagName(alias) {
-				panic(fmt.Errorf("cfgm: alias --%s is reserved", alias))
+				return fmt.Errorf("cfgm: alias --%s is reserved", alias)
 			}
 			if seen[alias] {
-				panic(fmt.Errorf("cfgm: duplicate alias --%s for %s", alias, path))
+				return fmt.Errorf("cfgm: duplicate alias --%s for %s", alias, path)
 			}
 			seen[alias] = true
 		}
 	}
+	return nil
 }
 
 func (m *Manager[T]) newCommandBinding(commandPath string, rootOnly bool) (*commandBinding[T], error) {
@@ -761,13 +803,14 @@ type schemaField struct {
 }
 
 type schemaModel struct {
-	rootType reflect.Type
-	fields   []schemaField
-	paths    map[string]reflect.Type
-	structs  map[string]bool
-	fieldSet map[string]bool
-	codecs   map[reflect.Type]valueCodec
-	active   map[reflect.Type]bool
+	rootType     reflect.Type
+	fields       []schemaField
+	fieldsByType map[reflect.Type][]configField
+	paths        map[string]reflect.Type
+	structs      map[string]bool
+	fieldSet     map[string]bool
+	codecs       map[reflect.Type]valueCodec
+	active       map[reflect.Type]bool
 }
 
 func buildSchemaModel(typ reflect.Type, codecs map[reflect.Type]valueCodec) *schemaModel {
@@ -778,12 +821,13 @@ func buildSchemaModel(typ reflect.Type, codecs map[reflect.Type]valueCodec) *sch
 		panic(fmt.Errorf("cfgm: config root must be a struct, got %s", typ))
 	}
 	model := &schemaModel{
-		rootType: typ,
-		paths:    make(map[string]reflect.Type),
-		structs:  make(map[string]bool),
-		fieldSet: make(map[string]bool),
-		codecs:   codecs,
-		active:   make(map[reflect.Type]bool),
+		rootType:     typ,
+		fieldsByType: make(map[reflect.Type][]configField),
+		paths:        make(map[string]reflect.Type),
+		structs:      make(map[string]bool),
+		fieldSet:     make(map[string]bool),
+		codecs:       codecs,
+		active:       make(map[reflect.Type]bool),
 	}
 	model.collect(typ, "", nil)
 	model.validateEnvironmentNames()
@@ -796,7 +840,7 @@ func (m *schemaModel) collect(typ reflect.Type, prefix string, parentIndex []int
 	defer m.leaveType(typ)
 	for _, configured := range m.configFields(typ) {
 		field := configured.field
-		key := configTagName(field)
+		key := configured.key
 		m.validateNewPath(prefix, key)
 		path := joinSchemaPath(prefix, key)
 		index := append(append([]int(nil), parentIndex...), configured.index...)
@@ -847,7 +891,7 @@ func (m *schemaModel) collectCompositePaths(typ reflect.Type, prefix string) {
 	defer m.leaveType(typ)
 	for _, configured := range m.configFields(typ) {
 		field := configured.field
-		key := configTagName(field)
+		key := configured.key
 		m.validateNewPath(prefix, key)
 		path := joinSchemaPath(prefix, key)
 		m.paths[path] = field.Type
@@ -856,12 +900,17 @@ func (m *schemaModel) collectCompositePaths(typ reflect.Type, prefix string) {
 }
 
 func (m *schemaModel) configFields(typ reflect.Type) []configField {
-	fields, inlinedTypes := configFields(typ)
-	for _, inlinedType := range inlinedTypes {
-		if _, hasCodec := m.codecs[inlinedType]; hasCodec {
-			panic(fmt.Errorf("cfgm: inline config type %s cannot use a codec", inlinedType))
+	typ = normalizeStructType(typ)
+	if fields, ok := m.fieldsByType[typ]; ok {
+		return fields
+	}
+	fields, embeddedTypes := configFields(typ)
+	for _, embeddedType := range embeddedTypes {
+		if _, hasCodec := m.codecs[embeddedType]; hasCodec {
+			panic(fmt.Errorf("cfgm: embedded config type %s cannot use a codec", embeddedType))
 		}
 	}
+	m.fieldsByType[typ] = fields
 	return fields
 }
 
@@ -1003,7 +1052,7 @@ func (l *configLoader[T]) load(ctx context.Context) (*T, *Report, error) {
 	if ctx == nil {
 		return nil, nil, errors.New("cfgm: nil context")
 	}
-	configMap := structToMapWithCodecs(l.defaults, l.codecs)
+	configMap := structToMapWithCodecs(l.defaults, l.codecs, l.schema.configFields)
 	lookup := environmentSnapshot()
 	report := &Report{}
 	for _, source := range l.sources {

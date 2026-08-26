@@ -26,7 +26,7 @@ func defaultConfig() config {
 	return defaults
 }
 
-var manager = cfgm.New(defaultConfig(), cfgm.WithoutDefaultPaths())
+var manager = cfgm.MustNew(defaultConfig(), cfgm.WithoutDefaultPaths())
 
 func main() {
 	loaded, err := manager.Load(

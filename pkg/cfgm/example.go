@@ -25,19 +25,30 @@ import (
 //
 // 使用示例：
 //
-//	yaml := cfgm.ExampleYAML(DefaultConfig())
+//	yaml, err := cfgm.ExampleYAML(DefaultConfig())
 //	os.WriteFile("config/config.example.yaml", yaml, 0644)
-func ExampleYAML[T any](cfg T) []byte {
-	node := structToNode(reflect.ValueOf(cfg), reflect.TypeOf(cfg))
+func ExampleYAML[T any](cfg T) (data []byte, err error) {
+	defer func() {
+		if recovered := recover(); recovered != nil {
+			data = nil
+			err = configDefinitionError(recovered)
+		}
+	}()
+	model := validateRenderConfigType(reflect.TypeOf(cfg))
+	node := structToNode(reflect.ValueOf(cfg), reflect.TypeOf(cfg), model)
 	node.HeadComment = "默认配置示例文件, 此文件由单元测试生成, 请勿直接修改\n复制此文件为 config.yaml 并根据需要修改"
 
 	var buf bytes.Buffer
 	enc := yamlv3.NewEncoder(&buf)
 	enc.SetIndent(2)
-	_ = enc.Encode(node)
-	_ = enc.Close()
+	if err := enc.Encode(node); err != nil {
+		return nil, fmt.Errorf("encode example YAML: %w", err)
+	}
+	if err := enc.Close(); err != nil {
+		return nil, fmt.Errorf("close example YAML encoder: %w", err)
+	}
 
-	return normalizeBlankLines(buf.Bytes())
+	return normalizeBlankLines(buf.Bytes()), nil
 }
 
 // normalizeBlankLines removes indentation from whitespace-only lines while
@@ -57,30 +68,53 @@ func normalizeBlankLines(data []byte) []byte {
 //
 // 使用示例：
 //
-//	yaml := cfgm.MarshalYAML(cfg)
+//	yaml, err := cfgm.MarshalYAML(cfg)
 //	os.WriteFile("config/config.yaml", yaml, 0644)
-func MarshalYAML[T any](cfg T) []byte {
-	data, _ := yamlv3.Marshal(structToMap(cfg))
-
-	return data
+func MarshalYAML[T any](cfg T) (data []byte, err error) {
+	defer func() {
+		if recovered := recover(); recovered != nil {
+			data = nil
+			err = configDefinitionError(recovered)
+		}
+	}()
+	model := validateRenderConfigType(reflect.TypeOf(cfg))
+	data, err = yamlv3.Marshal(structToMapWithCodecs(cfg, nil, model.configFields))
+	if err != nil {
+		return nil, fmt.Errorf("marshal YAML: %w", err)
+	}
+	return data, nil
 }
 
 // MarshalJSON 将配置结构体序列化为 JSON（带缩进）。
 //
 // 使用示例：
 //
-//	jsonBytes := cfgm.MarshalJSON(cfg)
+//	jsonBytes, err := cfgm.MarshalJSON(cfg)
 //	os.WriteFile("config/config.json", jsonBytes, 0644)
-func MarshalJSON[T any](cfg T) []byte {
-	data, err := json.Marshal(cfg, json.WithMarshalers(durationMarshaler()))
+func MarshalJSON[T any](cfg T) (data []byte, err error) {
+	defer func() {
+		if recovered := recover(); recovered != nil {
+			data = nil
+			err = configDefinitionError(recovered)
+		}
+	}()
+	validateRenderConfigType(reflect.TypeOf(cfg))
+	data, err = json.Marshal(cfg, json.WithMarshalers(durationMarshaler()))
 	if err != nil {
-		return nil
+		return nil, fmt.Errorf("marshal JSON: %w", err)
 	}
 	value := jsontext.Value(data)
 	if err := value.Indent(jsontext.WithIndent("  ")); err != nil {
-		return nil
+		return nil, fmt.Errorf("indent JSON: %w", err)
 	}
-	return append(value, '\n')
+	return append(value, '\n'), nil
+}
+
+func validateRenderConfigType(typ reflect.Type) *schemaModel {
+	if typ == nil {
+		panic("cfgm: config root must be a struct, got nil")
+	}
+	return buildSchemaModel(normalizeStructType(typ), nil)
 }
 
 // InitConfigFile 将默认配置写入运行配置文件。
@@ -103,12 +137,15 @@ func InitConfigFile[T any](defaultConfig T, configPath string) error {
 		return fmt.Errorf("stat config file %s: %w", outputPath, statErr)
 	}
 
+	data, err := MarshalYAML(defaultConfig)
+	if err != nil {
+		return err
+	}
 	outputDir := filepath.Dir(outputPath)
 	if err := os.MkdirAll(outputDir, 0750); err != nil {
 		return fmt.Errorf("create config directory %s: %w", outputDir, err)
 	}
-
-	if err := os.WriteFile(outputPath, MarshalYAML(defaultConfig), 0600); err != nil {
+	if err := os.WriteFile(outputPath, data, 0600); err != nil {
 		return fmt.Errorf("write config file %s: %w", outputPath, err)
 	}
 
@@ -129,7 +166,7 @@ func resolveProjectPath(path string, callerSkip int) (string, error) {
 }
 
 // structToNode 将结构体转换为带注释的 yamlv3.Node。
-func structToNode(val reflect.Value, typ reflect.Type) *yamlv3.Node {
+func structToNode(val reflect.Value, typ reflect.Type, model *schemaModel) *yamlv3.Node {
 	// 处理指针类型
 	if val.Kind() == reflect.Pointer {
 		if val.IsNil() {
@@ -141,11 +178,14 @@ func structToNode(val reflect.Value, typ reflect.Type) *yamlv3.Node {
 
 	node := &yamlv3.Node{Kind: yamlv3.MappingNode}
 
-	fields, _ := configFields(typ)
+	fields := model.configFields(typ)
 	for _, configured := range fields {
 		field := configured.field
-		fieldVal := val.FieldByIndex(configured.index)
-		key := configTagName(field)
+		fieldVal, ok := valueAtPath(val, configured.index)
+		if !ok {
+			continue
+		}
+		key := configured.key
 		comment := field.Tag.Get("desc")
 
 		// Key node
@@ -161,13 +201,13 @@ func structToNode(val reflect.Value, typ reflect.Type) *yamlv3.Node {
 
 		switch {
 		case isStruct:
-			valNode = structToNode(fieldVal, field.Type)
+			valNode = structToNode(fieldVal, field.Type, model)
 			setComplexFieldComment(keyNode, comment)
 		case isSlice || isMap:
-			valNode = valueToNode(fieldVal, field.Type)
+			valNode = valueToNode(fieldVal, field.Type, model)
 			setComplexFieldComment(keyNode, comment)
 		default:
-			valNode = valueToNode(fieldVal, field.Type)
+			valNode = valueToNode(fieldVal, field.Type, model)
 			// 多行注释放在 key 上方（HeadComment），单行注释放在行尾（LineComment）
 			setSimpleFieldComment(keyNode, valNode, comment)
 		}
@@ -197,7 +237,7 @@ func setSimpleFieldComment(keyNode, valNode *yamlv3.Node, comment string) {
 }
 
 // valueToNode 将值转换为 yamlv3.Node。
-func valueToNode(val reflect.Value, typ reflect.Type) *yamlv3.Node {
+func valueToNode(val reflect.Value, typ reflect.Type, model *schemaModel) *yamlv3.Node {
 	if !val.IsValid() {
 		return &yamlv3.Node{Kind: yamlv3.ScalarNode, Tag: "!!null", Value: "null"}
 	}
@@ -207,14 +247,14 @@ func valueToNode(val reflect.Value, typ reflect.Type) *yamlv3.Node {
 			return &yamlv3.Node{Kind: yamlv3.ScalarNode, Tag: "!!null", Value: "null"}
 		}
 		inner := val.Elem()
-		return valueToNode(inner, inner.Type())
+		return valueToNode(inner, inner.Type(), model)
 	}
 
 	if typ.Kind() == reflect.Pointer {
 		if val.IsNil() {
 			return &yamlv3.Node{Kind: yamlv3.ScalarNode, Tag: "!!null", Value: "null"}
 		}
-		return valueToNode(val.Elem(), typ.Elem())
+		return valueToNode(val.Elem(), typ.Elem(), model)
 	}
 
 	// 特殊类型处理
@@ -236,7 +276,7 @@ func valueToNode(val reflect.Value, typ reflect.Type) *yamlv3.Node {
 	}
 
 	if typ.Kind() == reflect.Struct {
-		return structToNode(val, typ)
+		return structToNode(val, typ, model)
 	}
 
 	switch val.Kind() {
@@ -278,7 +318,7 @@ func valueToNode(val reflect.Value, typ reflect.Type) *yamlv3.Node {
 		} else {
 			for j := range val.Len() {
 				elem := val.Index(j)
-				elemNode := valueToNode(elem, elem.Type())
+				elemNode := valueToNode(elem, elem.Type(), model)
 				// slice 元素不使用引号样式，保持简洁
 				elemNode.Style = 0
 				node.Content = append(node.Content, elemNode)
@@ -308,7 +348,7 @@ func valueToNode(val reflect.Value, typ reflect.Type) *yamlv3.Node {
 			for _, entry := range entries {
 				node.Content = append(node.Content,
 					&yamlv3.Node{Kind: yamlv3.ScalarNode, Value: entry.key},
-					valueToNode(entry.value, entry.value.Type()),
+					valueToNode(entry.value, entry.value.Type(), model),
 				)
 			}
 		}
@@ -333,7 +373,7 @@ type mapNodeEntry struct {
 // 使用示例：
 //
 //	var files = cfgm.ConfigFiles[Config]{
-//	    Manager:     cfgm.New(DefaultConfig()),
+//	    Manager:     cfgm.MustNew(DefaultConfig()),
 //	    ExampleFile: "config/config.example.yaml",
 //	    RuntimeFile: "config/config.yaml",
 //	}
@@ -359,7 +399,10 @@ func (f ConfigFiles[T]) WriteExample(t *testing.T) {
 		t.Fatalf("无法找到项目根目录: %v", err)
 	}
 
-	yamlBytes := ExampleYAML(f.Manager.defaults)
+	yamlBytes, err := ExampleYAML(f.Manager.defaults)
+	if err != nil {
+		t.Fatalf("生成示例配置失败: %v", err)
+	}
 
 	outputDir := filepath.Dir(outputPath)
 	if err := os.MkdirAll(outputDir, 0750); err != nil {

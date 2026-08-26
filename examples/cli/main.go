@@ -71,7 +71,7 @@ func defaultConfig() config {
 }
 
 func main() {
-	manager := cfgm.New(
+	manager := cfgm.MustNew(
 		defaultConfig(),
 		cfgm.AppName("cfgm-example"),
 		cfgm.CLIAlias("server.addr", "a"),

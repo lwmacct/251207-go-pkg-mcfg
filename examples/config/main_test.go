@@ -30,7 +30,7 @@ func TestStrictAndPermissiveValidation(t *testing.T) {
 	_, err := manager.Load(t.Context(), cfgm.File(path))
 	require.ErrorContains(t, err, `unknown object member name "extra"`)
 
-	permissive := cfgm.New(defaultConfig(), cfgm.WithoutDefaultPaths(), cfgm.AllowUnknownKeys())
+	permissive := cfgm.MustNew(defaultConfig(), cfgm.WithoutDefaultPaths(), cfgm.AllowUnknownKeys())
 	_, err = permissive.Load(t.Context(), cfgm.File(path))
 	require.NoError(t, err)
 

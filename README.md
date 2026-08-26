@@ -38,7 +38,7 @@ type ServerConfig struct {
     Redis   RedisConfig   `json:"redis"   desc:"Redis 配置"`
 }
 
-var Manager = cfgm.New(
+var Manager = cfgm.MustNew(
     DefaultConfig(),
     cfgm.AppName("app"),
     cfgm.CLIAlias("server.addr", "a"),
@@ -46,20 +46,24 @@ var Manager = cfgm.New(
 )
 ```
 
-配置根类型必须是非指针 struct。`json` tag 是文件、环境变量和 CLI 的稳定 key，`desc` tag 用作 CLI help 和示例配置注释。
+配置根类型必须是非指针 struct。字段名和嵌入规则以 JSON v2 为基础：未声明 `json` tag 时使用 Go 字段名，建议对配置 API 显式声明稳定名称；`desc` tag 只用于 CLI help 和示例配置注释。`cfgm` 结构标签已移除。
+
+`cfgm.New` 会返回无效 tag、重复路径、递归类型、codec 和 CLI 选项错误；确定配置定义属于启动期常量时可使用 `cfgm.MustNew`。`ExampleYAML`、`MarshalYAML` 和 `MarshalJSON` 同样返回错误，不会静默返回空内容。
 
 ### 组合配置
 
-使用 `cfgm:",inline"` 将公共配置类型的字段展开到当前配置层级：
+使用标准 JSON v2 的 `json:",embed"` 将公共配置类型的字段展开到当前配置层级：
 
 ```go
 type TLSConfig struct {
-    tlsreload.Config `cfgm:",inline"`
+    tlsreload.Config `json:",embed"`
     Enabled bool `json:"enabled" desc:"是否启用 TLS"`
 }
 ```
 
-嵌入类型字段的文件、环境变量和 CLI 路径不会增加中间层级。`inline` 必须用于匿名的非指针 struct，该字段不能再声明 `json` tag，也不能为嵌入类型注册 codec；展开后的重复配置 key 会在 `cfgm.New` 时被拒绝。
+嵌入类型字段的文件、环境变量和 CLI 路径不会增加中间层级。`embed` 必须单独使用，嵌入类型必须是没有 JSON/text 方法的 struct（或指向 struct 的指针），不能注册 codec；展开后的重复配置 key 会由 `cfgm.New` 返回错误，包级初始化也可使用 `cfgm.MustNew`。
+
+为了保证 JSON、YAML、环境变量和 CLI 完全一致，配置字段只接受未加引号的 JSON 名称、`-` 和 `embed`；`omitempty`、`omitzero`、`string`、`case`、`format` 及未知选项会在构造 Manager 时被拒绝。JSON v2 的 map/`jsontext.Value` embedded fallback 也不受支持，因为它会绕过严格 Schema 的未知字段检查。
 
 ## 非 CLI 加载
 
@@ -135,7 +139,7 @@ export APP_LABELS='{"region":"cn"}'
 无法由内置 flag 表达的叶子类型使用 `WithCodec`：
 
 ```go
-manager := cfgm.New(defaults, cfgm.WithCodec(cfgm.Codec[Endpoint]{
+manager, err := cfgm.New(defaults, cfgm.WithCodec(cfgm.Codec[Endpoint]{
     Parse:  ParseEndpoint,
     Format: func(value Endpoint) string { return value.String() },
 }))
@@ -164,15 +168,15 @@ manager := cfgm.New(defaults, cfgm.WithCodec(cfgm.Codec[Endpoint]{
 需要保留字面量 `${VAR}` 时写成 `$${VAR}`。`WithoutTemplateExpansion()` 可全局关闭展开。
 
 ```go
-manager := cfgm.New(defaults, cfgm.WithoutTemplateExpansion())
+manager, err := cfgm.New(defaults, cfgm.WithoutTemplateExpansion())
 config, err := manager.Load(ctx, cfgm.File("config.yaml"))
 ```
 
 ## 示例配置
 
 ```go
-yaml := cfgm.ExampleYAML(DefaultConfig())
-jsonBytes := cfgm.MarshalJSON(DefaultConfig())
+yaml, err := cfgm.ExampleYAML(DefaultConfig())
+jsonBytes, err := cfgm.MarshalJSON(DefaultConfig())
 
 var files = cfgm.ConfigFiles[Config]{
     Manager:     Manager,

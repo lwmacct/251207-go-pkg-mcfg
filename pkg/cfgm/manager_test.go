@@ -3,7 +3,6 @@ package cfgm
 import (
 	"context"
 	"errors"
-	"fmt"
 	"reflect"
 	"strings"
 	"testing"
@@ -59,7 +58,7 @@ func bindingDefaults() bindingTestConfig {
 }
 
 func BenchmarkManagerLoadDefaults(b *testing.B) {
-	manager := New(bindingDefaults(), WithoutDefaultPaths())
+	manager := MustNew(bindingDefaults(), WithoutDefaultPaths())
 	ctx := context.Background()
 	b.ReportAllocs()
 	for b.Loop() {
@@ -70,7 +69,7 @@ func BenchmarkManagerLoadDefaults(b *testing.B) {
 }
 
 func TestManagerGeneratesTypedFlags(t *testing.T) {
-	manager := New(
+	manager := MustNew(
 		bindingDefaults(),
 		AppName("testapp"),
 		CLIAlias("server.addr", "a"),
@@ -98,7 +97,7 @@ func TestManagerGeneratesTypedFlags(t *testing.T) {
 }
 
 func TestManagerTrimsNestedCommandPath(t *testing.T) {
-	manager := New(bindingDefaults(), WithoutDefaultPaths(), HideCLI("server.redis.password"))
+	manager := MustNew(bindingDefaults(), WithoutDefaultPaths(), HideCLI("server.redis.password"))
 	var loaded *bindingTestConfig
 	redis := &cli.Command{
 		Name: "redis",
@@ -125,14 +124,14 @@ func TestManagerTrimsNestedCommandPath(t *testing.T) {
 }
 
 func TestManagerActionRequiresConfiguration(t *testing.T) {
-	manager := New(bindingDefaults(), WithoutDefaultPaths())
+	manager := MustNew(bindingDefaults(), WithoutDefaultPaths())
 	cmd := &cli.Command{Name: "app", Action: manager.Action(func(context.Context, *cli.Command, *bindingTestConfig) error { return nil })}
 	err := cmd.Run(t.Context(), []string{"app"})
 	require.ErrorContains(t, err, "must be configured")
 }
 
 func TestManagerLoadsSourcesInPriorityOrder(t *testing.T) {
-	manager := New(bindingDefaults(), AppName("testapp"), HideCLI("server.redis.password"))
+	manager := MustNew(bindingDefaults(), AppName("testapp"), HideCLI("server.redis.password"))
 	configPath := writeTempConfig(t, `
 server:
   addr: ":8000"
@@ -172,7 +171,7 @@ server:
 func TestManagerCLIOverridesRequiredDefaultTemplate(t *testing.T) {
 	defaults := bindingDefaults()
 	defaults.Server.Addr = `${SERVER_ADDR:?SERVER_ADDR is required}`
-	manager := New(defaults, WithoutDefaultPaths())
+	manager := MustNew(defaults, WithoutDefaultPaths())
 
 	loaded, err := runManager(t, manager, "--addr=:8200")
 	require.NoError(t, err)
@@ -180,7 +179,7 @@ func TestManagerCLIOverridesRequiredDefaultTemplate(t *testing.T) {
 }
 
 func TestManagerLoadsRepeatedStructValues(t *testing.T) {
-	manager := New(bindingDefaults())
+	manager := MustNew(bindingDefaults())
 	loaded, err := runManager(t, manager,
 		`--certificates={"id":"main","certificate":"op://cert/main","private-key":"op://key/main","refresh":"30s"}`,
 		`--certificates={"id":"api","certificate":"op://cert/api","private-key":"op://key/api","refresh":"1m"}`,
@@ -194,7 +193,7 @@ func TestManagerLoadsRepeatedStructValues(t *testing.T) {
 }
 
 func TestManagerStructValuesReplaceLowerPrioritySources(t *testing.T) {
-	manager := New(bindingDefaults())
+	manager := MustNew(bindingDefaults())
 	loaded, err := runManager(t, manager,
 		`--certificates={"id":"only","certificate":"file:///only.crt","private-key":"file:///only.key"}`,
 	)
@@ -204,21 +203,21 @@ func TestManagerStructValuesReplaceLowerPrioritySources(t *testing.T) {
 }
 
 func TestManagerStructValuesCanBeCleared(t *testing.T) {
-	manager := New(bindingDefaults())
+	manager := MustNew(bindingDefaults())
 	loaded, err := runManager(t, manager, `--certificates=[]`)
 	require.NoError(t, err)
 	assert.Empty(t, loaded.Server.Certificates)
 }
 
 func TestManagerScalarCollectionsReplaceDefaults(t *testing.T) {
-	manager := New(bindingDefaults())
+	manager := MustNew(bindingDefaults())
 	loaded, err := runManager(t, manager, `--tags=cli`)
 	require.NoError(t, err)
 	assert.Equal(t, []string{"cli"}, loaded.Server.Tags)
 }
 
 func TestManagerRejectsInvalidStructValues(t *testing.T) {
-	manager := New(bindingDefaults())
+	manager := MustNew(bindingDefaults())
 	tests := []struct {
 		name string
 		args []string
@@ -243,7 +242,7 @@ func TestManagerUsesRegisteredCodec(t *testing.T) {
 	type codecConfig struct {
 		Endpoint bindingEndpoint `json:"endpoint" desc:"服务端点"`
 	}
-	manager := New(codecConfig{}, WithCodec(Codec[bindingEndpoint]{
+	manager := MustNew(codecConfig{}, WithCodec(Codec[bindingEndpoint]{
 		Parse: func(value string) (bindingEndpoint, error) {
 			if !strings.HasPrefix(value, "svc://") {
 				return "", errors.New("scheme must be svc")
@@ -263,7 +262,7 @@ func TestManagerUsesRegisteredCodec(t *testing.T) {
 }
 
 func TestManagerRejectsUnknownFileFieldsInsideStructSlices(t *testing.T) {
-	manager := New(bindingDefaults())
+	manager := MustNew(bindingDefaults())
 	configPath := writeTempConfig(t, `
 server:
   certificates:
@@ -287,7 +286,7 @@ func TestManagerLoadsCompositeEnvironmentValuesAsJSON(t *testing.T) {
 	t.Setenv("APP_LABELS", `{"region":"cn"}`)
 	t.Setenv("APP_CERTIFICATES", `[{"id":"main","refresh":"15s"}]`)
 
-	cfg, err := New(Config{}, WithoutDefaultPaths()).Load(t.Context(), Env("APP_"))
+	cfg, err := MustNew(Config{}, WithoutDefaultPaths()).Load(t.Context(), Env("APP_"))
 	require.NoError(t, err)
 	assert.Equal(t, []string{"api", "edge"}, cfg.Tags)
 	assert.Equal(t, map[string]string{"region": "cn"}, cfg.Labels)
@@ -301,7 +300,7 @@ func TestManagerEnvironmentCanSetEmptyScalar(t *testing.T) {
 		Name string `json:"name"`
 	}
 	t.Setenv("APP_NAME", "")
-	cfg, err := New(Config{Name: "default"}, WithoutDefaultPaths()).Load(t.Context(), Env("APP_"))
+	cfg, err := MustNew(Config{Name: "default"}, WithoutDefaultPaths()).Load(t.Context(), Env("APP_"))
 	require.NoError(t, err)
 	assert.Empty(t, cfg.Name)
 }
@@ -311,7 +310,7 @@ func TestManagerRejectsInvalidCompositeEnvironmentValues(t *testing.T) {
 		Tags []string `json:"tags"`
 	}
 	t.Setenv("APP_TAGS", "api,edge")
-	_, err := New(Config{}, WithoutDefaultPaths()).Load(t.Context(), Env("APP_"))
+	_, err := MustNew(Config{}, WithoutDefaultPaths()).Load(t.Context(), Env("APP_"))
 	require.ErrorContains(t, err, "APP_TAGS")
 	require.ErrorContains(t, err, "JSON")
 }
@@ -327,13 +326,13 @@ routes:
       - url: https://api.example.com
         typo: true
 `)
-	_, err := New(Config{}, WithoutDefaultPaths()).Load(t.Context(), File(path))
+	_, err := MustNew(Config{}, WithoutDefaultPaths()).Load(t.Context(), File(path))
 	require.ErrorContains(t, err, `unknown object member name "typo"`)
 	require.ErrorContains(t, err, `/routes/0/backends/0`)
 }
 
 func TestManagerRejectsDeepUnknownStructFlagFields(t *testing.T) {
-	manager := New(bindingDefaults())
+	manager := MustNew(bindingDefaults())
 	_, err := runManager(t, manager,
 		`--routes={"path":"/api","backends":[{"url":"https://api.example.com","typo":true}]}`,
 	)
@@ -345,7 +344,7 @@ func TestManagerCodecAppliesToFileAndEnvironment(t *testing.T) {
 	type Config struct {
 		Endpoint bindingEndpoint `json:"endpoint"`
 	}
-	manager := New(Config{}, WithoutDefaultPaths(), WithCodec(Codec[bindingEndpoint]{
+	manager := MustNew(Config{}, WithoutDefaultPaths(), WithCodec(Codec[bindingEndpoint]{
 		Parse: func(value string) (bindingEndpoint, error) {
 			if !strings.HasPrefix(value, "svc://") {
 				return "", errors.New("scheme must be svc")
@@ -378,17 +377,34 @@ func TestManagerRejectsInvalidOptionsAndSchema(t *testing.T) {
 	type Config struct {
 		Name string `json:"name"`
 	}
-	assert.PanicsWithValue(t, "cfgm: codec for string requires Parse", func() {
-		New(Config{}, WithCodec(Codec[string]{}))
-	})
-	assert.PanicsWithValue(t, "cfgm: codec for string requires Format", func() {
-		New(Config{}, WithCodec(Codec[string]{Parse: func(value string) (string, error) { return value, nil }}))
-	})
-	assert.PanicsWithValue(t, "cfgm: logger must not be nil", func() {
-		New(Config{}, Logger(nil))
-	})
-	assert.Panics(t, func() { New("") })
-	assert.Panics(t, func() { New((*Config)(nil)) })
+	_, err := New(Config{}, WithCodec(Codec[string]{}))
+	require.EqualError(t, err, "cfgm: codec for string requires Parse")
+	_, err = New(Config{}, WithCodec(Codec[string]{Parse: func(value string) (string, error) { return value, nil }}))
+	require.EqualError(t, err, "cfgm: codec for string requires Format")
+	_, err = New(Config{}, Logger(nil))
+	require.EqualError(t, err, "cfgm: logger must not be nil")
+	_, err = New("")
+	require.ErrorContains(t, err, "config root must be a struct")
+	_, err = New((*Config)(nil))
+	require.ErrorContains(t, err, "config root must be a struct")
+	type UnsupportedOption struct {
+		Name string `json:"name,omitempty"`
+	}
+	_, err = New(UnsupportedOption{})
+	require.EqualError(t, err, `cfgm: field Name uses unsupported json option "omitempty"`)
+	type QuotedName struct {
+		Name string `json:"'name'"`
+	}
+	_, err = New(QuotedName{})
+	require.EqualError(t, err, "cfgm: field Name uses an unsupported quoted json name")
+	type IgnoredField struct {
+		Visible string `json:"visible"`
+		Hidden  string `json:"-"`
+	}
+	manager, err := New(IgnoredField{})
+	require.NoError(t, err)
+	assert.True(t, manager.schema.isFieldPath("visible"))
+	assert.False(t, manager.schema.hasPath("Hidden"))
 }
 
 func TestManagerTreatsCodecStructAsLeaf(t *testing.T) {
@@ -399,7 +415,7 @@ func TestManagerTreatsCodecStructAsLeaf(t *testing.T) {
 	type Config struct {
 		Endpoint Endpoint `json:"endpoint"`
 	}
-	manager := New(Config{}, WithCodec(Codec[Endpoint]{
+	manager := MustNew(Config{}, WithCodec(Codec[Endpoint]{
 		Parse: func(value string) (Endpoint, error) {
 			parts := strings.SplitN(value, "://", 2)
 			if len(parts) != 2 {
@@ -421,7 +437,7 @@ func TestManagerPreservesDefaultCodecValues(t *testing.T) {
 	type Config struct {
 		Endpoint Endpoint `json:"endpoint"`
 	}
-	manager := New(Config{Endpoint: Endpoint{Scheme: "svc", Name: "default"}},
+	manager := MustNew(Config{Endpoint: Endpoint{Scheme: "svc", Name: "default"}},
 		WithoutDefaultPaths(),
 		WithCodec(Codec[Endpoint]{
 			Parse: func(value string) (Endpoint, error) {
@@ -449,7 +465,7 @@ func TestManagerPreservesDefaultCodecsInsideComposites(t *testing.T) {
 	type Config struct {
 		Services []Service `json:"services"`
 	}
-	manager := New(Config{Services: []Service{{Endpoint: Endpoint{Name: "default"}}}},
+	manager := MustNew(Config{Services: []Service{{Endpoint: Endpoint{Name: "default"}}}},
 		WithoutDefaultPaths(),
 		WithCodec(Codec[Endpoint]{
 			Parse:  func(value string) (Endpoint, error) { return Endpoint{Name: value}, nil },
@@ -472,7 +488,7 @@ func TestManagerUsesCodecInsideStructSlice(t *testing.T) {
 	type Config struct {
 		Services []Service `json:"services"`
 	}
-	manager := New(Config{}, WithCodec(Codec[Endpoint]{
+	manager := MustNew(Config{}, WithCodec(Codec[Endpoint]{
 		Parse:  func(value string) (Endpoint, error) { return Endpoint{Name: value}, nil },
 		Format: func(value Endpoint) string { return value.Name },
 	}))
@@ -493,7 +509,7 @@ func TestManagerSupportsNamedScalarTypes(t *testing.T) {
 		Name  Name  `json:"name"`
 		Count Count `json:"count"`
 	}
-	manager := New(Config{Name: "default", Count: 2})
+	manager := MustNew(Config{Name: "default", Count: 2})
 	root := configuredRoot(t, manager, func(context.Context, *cli.Command, *Config) error { return nil })
 	requireFlagType[*cli.StringFlag](t, root.Flags, "name")
 	requireFlagType[*cli.IntFlag](t, root.Flags, "count")
@@ -505,7 +521,7 @@ func TestManagerSupportsNamedScalarSliceTypes(t *testing.T) {
 	type Config struct {
 		Names Names `json:"names"`
 	}
-	manager := New(Config{Names: Names{"default"}})
+	manager := MustNew(Config{Names: Names{"default"}})
 	root := configuredRoot(t, manager, func(context.Context, *cli.Command, *Config) error { return nil })
 	requireFlagType[*cli.StringSliceFlag](t, root.Flags, "names")
 }
@@ -515,7 +531,7 @@ func TestManagerSupportsNamedStringMapTypes(t *testing.T) {
 	type Config struct {
 		Labels Labels `json:"labels"`
 	}
-	manager := New(Config{Labels: Labels{"default": "yes"}})
+	manager := MustNew(Config{Labels: Labels{"default": "yes"}})
 	root := configuredRoot(t, manager, func(context.Context, *cli.Command, *Config) error { return nil })
 	requireFlagType[*cli.StringMapFlag](t, root.Flags, "labels")
 }
@@ -528,54 +544,50 @@ func TestManagerRejectsAmbiguousSchemaKeys(t *testing.T) {
 		})
 		buildSchemaModel(typ, nil)
 	})
-	assert.PanicsWithError(t, `cfgm: config key "server.addr" must not contain dots`, func() {
-		New(struct {
-			Addr string `json:"server.addr"`
-		}{})
-	})
+	_, err := New(struct {
+		Addr string `json:"server.addr"`
+	}{})
+	require.EqualError(t, err, `cfgm: config key "server.addr" must not contain dots`)
 	type Node struct {
 		Children []Node `json:"children"`
 	}
-	assert.Panics(t, func() { New(Node{}) })
+	_, err = New(Node{})
+	require.ErrorContains(t, err, "recursive config type")
 }
 
 func TestManagerRejectsInvalidCLIOptions(t *testing.T) {
 	tests := []struct {
 		name  string
-		build func()
+		build func() error
 		want  string
 	}{
-		{name: "hidden path", build: func() { New(bindingDefaults(), HideCLI("missing")) }, want: "hidden CLI path"},
-		{name: "alias path", build: func() { New(bindingDefaults(), CLIAlias("missing", "m")) }, want: "alias path"},
-		{name: "hidden alias", build: func() {
-			New(bindingDefaults(), HideCLI("server.redis"), CLIAlias("server.redis.url", "r"))
+		{name: "hidden path", build: func() error { _, err := New(bindingDefaults(), HideCLI("missing")); return err }, want: "hidden CLI path"},
+		{name: "alias path", build: func() error { _, err := New(bindingDefaults(), CLIAlias("missing", "m")); return err }, want: "alias path"},
+		{name: "hidden alias", build: func() error {
+			_, err := New(bindingDefaults(), HideCLI("server.redis"), CLIAlias("server.redis.url", "r"))
+			return err
 		}, want: "hidden"},
-		{name: "reserved alias", build: func() { New(bindingDefaults(), CLIAlias("server.addr", "c")) }, want: "reserved"},
-		{name: "help alias", build: func() { New(bindingDefaults(), CLIAlias("server.addr", "h")) }, want: "reserved"},
-		{name: "duplicate alias", build: func() { New(bindingDefaults(), CLIAlias("server.addr", "x", "x")) }, want: "duplicate"},
+		{name: "reserved alias", build: func() error { _, err := New(bindingDefaults(), CLIAlias("server.addr", "c")); return err }, want: "reserved"},
+		{name: "help alias", build: func() error { _, err := New(bindingDefaults(), CLIAlias("server.addr", "h")); return err }, want: "reserved"},
+		{name: "duplicate alias", build: func() error { _, err := New(bindingDefaults(), CLIAlias("server.addr", "x", "x")); return err }, want: "duplicate"},
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			defer func() {
-				value := recover()
-				require.NotNil(t, value)
-				assert.Contains(t, fmt.Sprint(value), test.want)
-			}()
-			test.build()
+			require.ErrorContains(t, test.build(), test.want)
 		})
 	}
 }
 
 func TestManagerConfigureRejectsInvalidCommandTrees(t *testing.T) {
-	manager := New(bindingDefaults(), CLIAlias("server.addr", "x"), CLIAlias("server.debug", "x"))
+	manager := MustNew(bindingDefaults(), CLIAlias("server.addr", "x"), CLIAlias("server.debug", "x"))
 	server := &cli.Command{Name: "server", Action: manager.Action(func(context.Context, *cli.Command, *bindingTestConfig) error { return nil })}
 	require.ErrorContains(t, manager.Configure(&cli.Command{Name: "app", Commands: []*cli.Command{server}}), "ambiguous")
 
-	require.ErrorContains(t, New(bindingDefaults()).Configure(nil), "nil")
-	invalid := New(bindingDefaults())
+	require.ErrorContains(t, MustNew(bindingDefaults()).Configure(nil), "nil")
+	invalid := MustNew(bindingDefaults())
 	require.ErrorContains(t, invalid.Configure(&cli.Command{Name: "app", Commands: []*cli.Command{{Name: "bad.name"}}}), "invalid command")
 
-	collision := New(bindingDefaults())
+	collision := MustNew(bindingDefaults())
 	server = &cli.Command{
 		Name:   "server",
 		Flags:  []cli.Flag{&cli.StringFlag{Name: "addr"}},
@@ -583,7 +595,7 @@ func TestManagerConfigureRejectsInvalidCommandTrees(t *testing.T) {
 	}
 	require.ErrorContains(t, collision.Configure(&cli.Command{Name: "app", Commands: []*cli.Command{server}}), "ambiguous")
 
-	missing := New(bindingDefaults())
+	missing := MustNew(bindingDefaults())
 	other := &cli.Command{Name: "other", Action: missing.Action(func(context.Context, *cli.Command, *bindingTestConfig) error { return nil })}
 	root := &cli.Command{Name: "app", Commands: []*cli.Command{other}}
 	missing.MustConfigure(root)
@@ -591,7 +603,7 @@ func TestManagerConfigureRejectsInvalidCommandTrees(t *testing.T) {
 }
 
 func TestManagerActionRejectsAnUnconfiguredCommandTree(t *testing.T) {
-	manager := New(bindingDefaults())
+	manager := MustNew(bindingDefaults())
 	configured := &cli.Command{
 		Name: "app",
 		Commands: []*cli.Command{{
@@ -616,7 +628,7 @@ func TestManagerActionRejectsAnUnconfiguredCommandTree(t *testing.T) {
 }
 
 func TestManagerConfigureIsTransactional(t *testing.T) {
-	manager := New(bindingDefaults())
+	manager := MustNew(bindingDefaults())
 	root := &cli.Command{
 		Name: "app",
 		Commands: []*cli.Command{
@@ -636,7 +648,7 @@ func TestManagerRejectsGeneratedReservedNames(t *testing.T) {
 	type Config struct {
 		Config string `json:"config"`
 	}
-	manager := New(Config{})
+	manager := MustNew(Config{})
 	require.ErrorContains(t, manager.Configure(&cli.Command{Name: "app"}), "reserved")
 }
 
@@ -646,7 +658,7 @@ func TestManagerAllowsNullCollections(t *testing.T) {
 		Labels map[string]string `json:"labels"`
 	}
 	path := writeTempConfig(t, "names: null\nlabels: null\n")
-	cfg, err := New(Config{}, WithoutDefaultPaths()).Load(t.Context(), File(path))
+	cfg, err := MustNew(Config{}, WithoutDefaultPaths()).Load(t.Context(), File(path))
 	require.NoError(t, err)
 	assert.Nil(t, cfg.Names)
 	assert.Nil(t, cfg.Labels)
@@ -658,7 +670,7 @@ func TestManagerSupportsNilCompositeDefaultsAndTimestamps(t *testing.T) {
 		Labels map[string]string `json:"labels"`
 		At     time.Time         `json:"at"`
 	}
-	manager := New(Config{})
+	manager := MustNew(Config{})
 	var loaded *Config
 	cmd := configuredRoot(t, manager, func(_ context.Context, _ *cli.Command, cfg *Config) error {
 		loaded = cfg

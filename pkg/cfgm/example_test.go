@@ -44,7 +44,7 @@ func Example_exampleYAML() {
 		},
 	}
 
-	yaml := cfgm.ExampleYAML(defaultCfg)
+	yaml, _ := cfgm.ExampleYAML(defaultCfg)
 	fmt.Println(string(yaml))
 
 	// Output:
@@ -66,7 +66,7 @@ func ExampleManager_Load() {
 		Debug bool   `json:"debug"`
 	}
 
-	manager := cfgm.New(Config{
+	manager := cfgm.MustNew(Config{
 		Name:  "default-app",
 		Debug: false,
 	}, cfgm.WithoutDefaultPaths())
@@ -91,7 +91,7 @@ func ExampleManager_Load_withEnv() {
 		Debug bool   `json:"debug"`
 	}
 
-	manager := cfgm.New(Config{Name: "default-app"}, cfgm.WithoutDefaultPaths())
+	manager := cfgm.MustNew(Config{Name: "default-app"}, cfgm.WithoutDefaultPaths())
 	cfg, err := manager.Load(context.Background(), cfgm.Env("APP_"))
 	if err != nil {
 		fmt.Println("加载失败:", err)
@@ -127,7 +127,7 @@ func Example_marshalJSON() {
 		},
 	}
 
-	jsonBytes := cfgm.MarshalJSON(defaultCfg)
+	jsonBytes, _ := cfgm.MarshalJSON(defaultCfg)
 	fmt.Println(string(jsonBytes))
 
 	// Output:
@@ -159,7 +159,7 @@ func ExampleManager_Load_withJSONConfig() {
 	}
 	defer func() { _ = os.Remove(tmpFile) }()
 
-	manager := cfgm.New(Config{Name: "default-app"}, cfgm.WithoutDefaultPaths())
+	manager := cfgm.MustNew(Config{Name: "default-app"}, cfgm.WithoutDefaultPaths())
 	cfg, err := manager.Load(context.Background(), cfgm.File(tmpFile))
 	if err != nil {
 		fmt.Println("加载失败:", err)

@@ -15,7 +15,7 @@ func TestLoadReportDescribesSourcesInPriorityOrder(t *testing.T) {
 	path := writeTempConfig(t, "name: from-file\ndebug: false\n")
 	t.Setenv("APP_NAME", "from-env")
 
-	cfg, report, err := New(Config{Name: "default", Debug: true}, WithoutDefaultPaths()).
+	cfg, report, err := MustNew(Config{Name: "default", Debug: true}, WithoutDefaultPaths()).
 		LoadReport(t.Context(), File(path), Env("APP_"))
 	require.NoError(t, err)
 	assert.Equal(t, "from-env", cfg.Name)
@@ -34,7 +34,7 @@ func TestLoadReportDeduplicatesCompositePaths(t *testing.T) {
 		} `json:"items"`
 	}
 	path := writeTempConfig(t, "items:\n  - name: one\n  - name: two\n")
-	_, report, err := New(Config{}, WithoutDefaultPaths()).LoadReport(t.Context(), File(path))
+	_, report, err := MustNew(Config{}, WithoutDefaultPaths()).LoadReport(t.Context(), File(path))
 	require.NoError(t, err)
 	require.Len(t, report.Sources, 1)
 	assert.Equal(t, []string{"items.name"}, report.Sources[0].Keys)

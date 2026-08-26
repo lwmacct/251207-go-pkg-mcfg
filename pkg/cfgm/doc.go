@@ -3,7 +3,7 @@
 // A Manager owns defaults, validation, codecs, file and environment loading,
 // generated urfave/cli flags, typed actions, and config examples:
 //
-//	manager := cfgm.New(DefaultConfig(), cfgm.AppName("app"))
+//	manager := cfgm.MustNew(DefaultConfig(), cfgm.AppName("app"))
 //	config, err := manager.Load(ctx, cfgm.Env("APP_"))
 //
 // Later sources replace earlier values. Manager.Load searches optional
@@ -16,7 +16,7 @@
 // --config/-c and --env-prefix/-e flags and projects each actionable command's
 // matching config subtree into typed local flags:
 //
-//	manager := cfgm.New(DefaultConfig(),
+//	manager := cfgm.MustNew(DefaultConfig(),
 //	    cfgm.CLIAlias("server.addr", "a"),
 //	    cfgm.HideCLI("server.redis.password"),
 //	)
@@ -33,9 +33,12 @@
 // Config.Server to the server command, so server.addr becomes --addr.
 // Manager.Action applies defaults, default paths, an explicit config file, the
 // selected environment prefix, and explicitly set CLI flags in that order.
-// Anonymous non-pointer structs tagged with cfgm:",inline" contribute their
-// fields at the containing config path across every source and generated
-// output. Inline types cannot use codecs, and duplicate paths are rejected.
+// JSON v2 embedded structs (using json:",embed" or an anonymous struct with
+// no explicit JSON name) contribute their fields at the containing config path
+// across every source and generated output. Embedded types cannot use codecs,
+// JSON/text methods, or map fallbacks; duplicate paths are rejected.
+// To keep every source equivalent, the supported JSON tag subset is unquoted
+// member names, "-", and "embed"; representation-specific options are rejected.
 //
 // # Composite Values
 //

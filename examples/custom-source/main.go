@@ -41,7 +41,7 @@ func main() {
 			"token":    "secret",
 		},
 	}}
-	manager := cfgm.New(config{}, cfgm.WithoutDefaultPaths())
+	manager := cfgm.MustNew(config{}, cfgm.WithoutDefaultPaths())
 	loaded, report, err := manager.LoadReport(context.Background(), source)
 	if err != nil {
 		_, _ = fmt.Fprintln(os.Stderr, err)

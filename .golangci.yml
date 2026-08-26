@@ -29,6 +29,11 @@ linters:
   exclusions:
     paths:
       - node_modules
+    rules:
+      # Staticcheck releases before Go 1.27 do not know the standard
+      # encoding/json/v2 `embed` struct tag option. Keep other SA5008 checks.
+      - linters: [staticcheck]
+        text: 'SA5008: invalid appearance of unknown `embed` tag option'
 
 formatters:
   enable:
